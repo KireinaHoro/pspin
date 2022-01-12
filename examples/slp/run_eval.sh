@@ -45,6 +45,7 @@ build() {
     make all DTYPE=$1 VLEN=$2 || die "Build failed for DTYPE=$1 VLEN=$2"
     mkdir -p eval-$2-$1
     mv build sim_slp_l1 eval-$2-$1
+    rm sim_slp_l1_debug
 }
 
 run() {
