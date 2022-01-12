@@ -96,7 +96,7 @@ def load_data(vlen, dtype):
     #### fit data
     # number of participating hpus -> [spin_time]
     # mean of local spin time vs. remote spin time (hpuid >= 8)
-    spin_map = pd.DataFrame(columns=['nhpus', 'dur', 'is_local'])
+    spin_map = pd.DataFrame(columns=['nhpus', 'dur', 'is_remote'])
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
@@ -126,10 +126,10 @@ def load_data(vlen, dtype):
                 spin_ratio_map[nhpus] = []
 
             for id, durs in lock_acc.items():
-                is_local = id < 8
+                is_remote = id >= 8
                 wait_sum = 0
                 for dur in durs:
-                    spin_map = spin_map.append({'nhpus': nhpus, 'dur': dur, 'is_local': is_local}, ignore_index=True)
+                    spin_map = spin_map.append({'nhpus': nhpus, 'dur': dur, 'is_remote': is_remote}, ignore_index=True)
                     wait_sum += dur
                 spin_ratio_map[nhpus] += [(wait_sum / time_ns, p, s)]
 
@@ -205,7 +205,7 @@ def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_ma
     # transform y data into log scale, plot linearly, use antilog labels
     spin_map['dur'] = spin_map['dur'].map(lambda a: np.log10(a))
     fig, ax = plt.subplots(figsize=(5, 2.7), layout='constrained')
-    sns.violinplot(x='nhpus', y='dur', hue='is_local', data=spin_map)
+    sns.violinplot(x='nhpus', y='dur', hue='is_remote', data=spin_map)
     ax.set_title(f'Spin duration | VLEN={vlen} {dtype}')
     ax.yaxis.set_major_formatter(StrMethodFormatter('$10^{{{x:.0f}}}$'))
     #ax.yaxis.set_ticks()
