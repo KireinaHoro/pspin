@@ -58,17 +58,18 @@ run() {
         echo "<<< Skipped $1 $2 p=$3 s=$4 $5"
         return 0
     fi
-    cp -R eval-$2-$1 $trial_name
-    pushd $trial_name
+    cp -R eval-$2-$1 /tmp/$trial_name
+    pushd /tmp/$trial_name
     echo ">>> Evaluating $1 $2 p=$3 s=$4 $5"
     if [[ $5 == "predict" ]]; then
         export PREDICT_ONLY=1
     fi
     $PWD/$EXEC -m 1 -p $3 -s $4 &> $OUT_DATA/$trial_name.transcript.txt || return 2
-    perl $TRACEVIS build/slp_l1 ./trace_core_* > $OUT_DATA/$trial_name.json || return 3
+    perl $TRACEVIS build/slp_l1 ./trace_core_* > $trial_name.json || return 3
+    gzip < $trial_name.json > $OUT_DATA/$trial_name.json.gz
     unset PREDICT_ONLY
     popd
-    rm -rf $trial_name
+    rm -rf /tmp/$trial_name
     echo "<<< Finished $1 $2 p=$3 s=$4 $5"
 }
 
