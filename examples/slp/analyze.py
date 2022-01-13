@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
 import json
+import gzip
 import sys
 import pickle
 from parse import parse
-from os.path import join
+from os.path import join, getsize
 from os import system
 from itertools import product
 from multiprocessing import get_context, Pool
@@ -36,7 +37,11 @@ LOAD_ARCHIVE = True
 def single_trace(is_fit, p, s, vec_len, dtype):
     ty = 'fit' if is_fit else 'predict'
     base = f'data/eval-{vec_len}-{dtype}-p{p}-s{s}-{ty}'
-    with open(f'{base}.json') as f:
+    trace_gz = f'{base}.json.gz'
+
+    if getsize(trace_gz) > 80 * 2 ** 20: # 80MB
+        raise RuntimeError(f'{trace_gz} larger than 80 MB')
+    with gzip.open(f'{base}.json.gz') as f:
         trace = f.read()
     print(f'parsing trace {base}')
 
@@ -101,7 +106,7 @@ def parse_trace(is_fit, p, s, vlen, dtype):
 
     try:
         batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, RuntimeError) as e:
         print(f'missing trace: {e}')
         return
     max_tput = max(gbps, max_tput)
