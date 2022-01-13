@@ -30,11 +30,17 @@ VLEN_CANDIDATES = [2 ** k for k in range(3, 8)]
 CHARTS_OUTPUT = 'charts/'
 system(f'mkdir -p {CHARTS_OUTPUT}')
 
+LOAD_ARCHIVE = True
+if len(sys.argv) > 1 and sys.argv[1] == 'reload':
+    print('Ignoring archives')
+    LOAD_ARCHIVE = False
+
 def single_trace(is_fit, p, s, vec_len, dtype):
     ty = 'fit' if is_fit else 'predict'
     base = f'data/eval-{vec_len}-{dtype}-p{p}-s{s}-{ty}'
     with open(f'{base}.json') as f:
         trace = f.read()
+    print(f'parsing trace {base}')
 
     # remove the last empty trace item
     trace = json.loads(trace)['traceEvents'][:-1]
@@ -81,11 +87,12 @@ def single_trace(is_fit, p, s, vec_len, dtype):
     return batch, good_payload, giops, good_put_gbps, lock_acc, time_ns
 
 def load_data(vlen, dtype):
-    try:
-        with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
-            return pickle.load(f)
-    except (FileNotFoundError, EOFError):
-        print(f'Parsed archive not found for {vlen} {dtype}, reloading')
+    if LOAD_ARCHIVE:
+        try:
+            with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
+                return pickle.load(f)
+        except (FileNotFoundError, EOFError):
+            print(f'Parsed archive not found for {vlen} {dtype}, reloading')
 
     #### predict data
     # packet number -> [(packet size, giops, gbps)]
