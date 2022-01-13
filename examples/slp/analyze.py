@@ -130,9 +130,12 @@ def parse_trace(is_fit, p, s, vlen, dtype):
                 wait_sum += dur
             spin_ratio_map[nhpus] += [(wait_sum / time_ns, p, s)]
 
+    print('finished parsing trace')
     return cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
 
-def load_data(pool, vlen, dtype):
+def load_data(pool, vlen, dtype, armap):
+    arlist = []
+    armap[vlen, dtype] = arlist
     if LOAD_ARCHIVE:
         try:
             with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
@@ -140,6 +143,14 @@ def load_data(pool, vlen, dtype):
         except (FileNotFoundError, EOFError):
             print(f'Parsed archive not found for {vlen} {dtype}, reloading')
 
+    print(f'spawning for VLEN={vlen} DTYPE={dtype}')
+
+    for p, s in product(P_CANDIDATES, S_CANDIDATES):
+        arlist.append(pool.apply_async(parse_trace, (False, p, s, vlen, dtype)))
+        if p <= P_CUTOFF:
+            arlist.append(pool.apply_async(parse_trace, (True, p, s, vlen, dtype)))
+
+def combine_results(arlist, vlen, dtype):
     #### predict data
     # packet number -> [(packet size, giops, gbps)]
     cluster_number = [{}, {}]
@@ -154,13 +165,7 @@ def load_data(pool, vlen, dtype):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
-    async_result_list = []
-    for p, s in product(P_CANDIDATES, S_CANDIDATES):
-        async_result_list.append(pool.apply_async(parse_trace, (False, p, s, vlen, dtype)))
-        if p <= P_CUTOFF:
-            async_result_list.append(pool.apply_async(parse_trace, (True, p, s, vlen, dtype)))
-
-    for ar in async_result_list:
+    for ar in arlist:
         cn, cs, sm, sr, mt = ar.get()
         cluster_number[0] |= cn[0]
         cluster_number[1] |= cn[1]
@@ -177,6 +182,8 @@ def load_data(pool, vlen, dtype):
     res = max_tput, cluster_number, cluster_size, spin_map, spin_ratio_map
     with open(f'dump_{vlen}_{dtype}.pickle', 'wb') as f:
         pickle.dump(res, f)
+
+    print(f'finished for VLEN={vlen} DTYPE={dtype}')
     return res
 
 max_tput_map = {}
@@ -249,8 +256,9 @@ def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spi
     #ax.yaxis.set_ticks()
     fig.savefig(f'{CHARTS_OUTPUT}/spin_duration-{vlen}-{dtype}.pdf')
 
-def intra_vd(pool, vlen, dtype):
-    dat = load_data(pool, vlen, dtype)
+def consume_data(armap, vlen, dtype):
+    arlist = armap[vlen, dtype]
+    dat = combine_results(arlist, vlen, dtype)
     plot_data(vlen, dtype, *dat)
 
 if __name__ == '__main__':
@@ -260,9 +268,13 @@ if __name__ == '__main__':
 
     #with get_context('spawn').Pool() as pool:
     with Pool() as pool:
+        armap = {}
         for vlen in VLEN_CANDIDATES:
             for dtype in SIZE_MAP.keys():
-                intra_vd(pool, vlen, dtype)
+                load_data(pool, vlen, dtype, armap)
+        for vlen in VLEN_CANDIDATES:
+            for dtype in SIZE_MAP.keys():
+                consume_data(armap, vlen, dtype)
 
     for (vlen, dtype), tput in max_tput_map:
         print(f'VLEN={vlen}\tDTYPE={dtype}\ttput Gbps')
