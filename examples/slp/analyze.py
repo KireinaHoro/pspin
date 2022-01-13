@@ -100,14 +100,16 @@ def load_data(vlen, dtype):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
+    max_tput = 0
     def parse_trace(is_fit, p, s):
-        nonlocal cluster_number, cluster_size, spin_map, spin_ratio_map
+        nonlocal cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
 
         try:
             batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype)
         except FileNotFoundError as e:
             print(f'missing trace: {e}')
             return
+        max_tput = max(gbps, max_tput)
 
         is_fit = int(is_fit)
         if p not in cluster_number[is_fit]:
@@ -138,12 +140,14 @@ def load_data(vlen, dtype):
         if p <= P_CUTOFF:
             parse_trace(True, p, s)
 
-    res = cluster_number, cluster_size, spin_map, spin_ratio_map
+    res = max_tput, cluster_number, cluster_size, spin_map, spin_ratio_map
     with open(f'dump_{vlen}_{dtype}.pickle', 'wb') as f:
         pickle.dump(res, f)
     return res
 
-def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_map):
+max_tput_map = {}
+def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spin_ratio_map):
+    max_tput_map[vlen, dtype] = max_tput
     def do_lines(x, xlabel, y_tagged_l, ylabel, title):
         fig, ax = plt.subplots(figsize=(5, 2.7), layout='constrained')
         for y, yt in y_tagged_l:
@@ -215,7 +219,9 @@ def intra_vd(vlen, dtype):
     dat = load_data(vlen, dtype)
     plot_data(vlen, dtype, *dat)
 
-# for vlen in ...; for dtype in ...
 for vlen in VLEN_CANDIDATES:
     for dtype in SIZE_MAP.keys():
         intra_vd(vlen, dtype)
+
+for (vlen, dtype), tput in max_tput_map:
+    print(f'VLEN={vlen}\tDTYPE={dtype}\ttput Gbps')
