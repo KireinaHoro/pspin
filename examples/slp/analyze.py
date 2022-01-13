@@ -7,7 +7,7 @@ from parse import parse
 from os.path import join
 from os import system
 from itertools import product
-from multiprocessing import Pool
+from multiprocessing import get_context, Pool
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -32,9 +32,6 @@ CHARTS_OUTPUT = 'charts/'
 system(f'mkdir -p {CHARTS_OUTPUT}')
 
 LOAD_ARCHIVE = True
-if len(sys.argv) > 1 and sys.argv[1] == 'reload':
-    print('Ignoring archives')
-    LOAD_ARCHIVE = False
 
 def single_trace(is_fit, p, s, vec_len, dtype):
     ty = 'fit' if is_fit else 'predict'
@@ -257,6 +254,11 @@ def intra_vd(pool, vlen, dtype):
     plot_data(vlen, dtype, *dat)
 
 if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == 'reload':
+        print('Ignoring archives')
+        LOAD_ARCHIVE = False
+
+    #with get_context('spawn').Pool() as pool:
     with Pool() as pool:
         for vlen in VLEN_CANDIDATES:
             for dtype in SIZE_MAP.keys():
