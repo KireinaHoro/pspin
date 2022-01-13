@@ -8,7 +8,8 @@ from parse import parse
 from os.path import join, getsize
 from os import system
 from itertools import product
-from multiprocessing import get_context, Pool
+from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures import as_completed
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -151,9 +152,9 @@ def load_data(pool, vlen, dtype, armap):
     print(f'spawning for VLEN={vlen} DTYPE={dtype}')
 
     for p, s in product(P_CANDIDATES, S_CANDIDATES):
-        arlist.append(pool.apply_async(parse_trace, (False, p, s, vlen, dtype)))
+        arlist.append(pool.submit(parse_trace, False, p, s, vlen, dtype))
         if p <= P_CUTOFF:
-            arlist.append(pool.apply_async(parse_trace, (True, p, s, vlen, dtype)))
+            arlist.append(pool.submit(parse_trace, True, p, s, vlen, dtype))
 
 def combine_results(arlist, vlen, dtype):
     #### predict data
@@ -170,8 +171,11 @@ def combine_results(arlist, vlen, dtype):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
-    for ar in arlist:
-        cn, cs, sm, sr, mt = ar.get()
+    for ar in as_completed(arlist):
+        res = ar.result()
+        if not res:
+            continue
+        cn, cs, sm, sr, mt = res
         cluster_number[0] |= cn[0]
         cluster_number[1] |= cn[1]
         cluster_size[0] |= cs[0]
@@ -264,15 +268,17 @@ def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spi
 def consume_data(armap, vlen, dtype):
     arlist = armap[vlen, dtype]
     dat = combine_results(arlist, vlen, dtype)
-    plot_data(vlen, dtype, *dat)
+    try:
+        plot_data(vlen, dtype, *dat)
+    except ValueError as e:
+        print(f'failed to plot something for VLEN={vlen} DTYPE={dtype}: {e}')
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'reload':
         print('Ignoring archives')
         LOAD_ARCHIVE = False
 
-    #with get_context('spawn').Pool() as pool:
-    with Pool() as pool:
+    with ProcessPoolExecutor(max_workers=8) as pool:
         armap = {}
         for vlen in VLEN_CANDIDATES:
             for dtype in SIZE_MAP.keys():
