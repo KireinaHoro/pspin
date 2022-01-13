@@ -7,6 +7,7 @@ from parse import parse
 from os.path import join
 from os import system
 from itertools import product
+from multiprocessing import Pool
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -86,7 +87,55 @@ def single_trace(is_fit, p, s, vec_len, dtype):
 
     return batch, good_payload, giops, good_put_gbps, lock_acc, time_ns
 
-def load_data(vlen, dtype):
+def parse_trace(is_fit, p, s, vlen, dtype):
+    #### predict data
+    # packet number -> [(packet size, giops, gbps)]
+    cluster_number = [{}, {}]
+    # packet size -> [(packet number, giops, gbps)]
+    cluster_size = [{}, {}]
+    # max throughput across all traces
+    max_tput = 0
+    #### fit data
+    # number of participating hpus -> [spin_time]
+    # mean of local spin time vs. remote spin time (hpuid >= 8)
+    spin_map = pd.DataFrame(columns=['nhpus', 'dur', 'is_remote'])
+    # number of participating hpus -> spin ratio
+    spin_ratio_map = {}
+
+    try:
+        batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype)
+    except FileNotFoundError as e:
+        print(f'missing trace: {e}')
+        return
+    max_tput = max(gbps, max_tput)
+
+    is_fit = int(is_fit)
+    if p not in cluster_number[is_fit]:
+        cluster_number[is_fit][p] = [(s, giops, gbps)]
+    else:
+        cluster_number[is_fit][p] += [(s, giops, gbps)]
+
+    if s not in cluster_size[is_fit]:
+        cluster_size[is_fit][s] = [(p, giops, gbps)]
+    else:
+        cluster_size[is_fit][s] += [(p, giops, gbps)]
+
+    if is_fit:
+        nhpus = len(lock_acc)
+        if nhpus not in spin_ratio_map:
+            spin_ratio_map[nhpus] = []
+
+        for id, durs in lock_acc.items():
+            is_remote = id >= 8
+            wait_sum = 0
+            for dur in durs:
+                spin_map = spin_map.append({'nhpus': nhpus, 'dur': dur, 'is_remote': is_remote}, ignore_index=True)
+                wait_sum += dur
+            spin_ratio_map[nhpus] += [(wait_sum / time_ns, p, s)]
+
+    return cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
+
+def load_data(pool, vlen, dtype):
     if LOAD_ARCHIVE:
         try:
             with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
@@ -99,7 +148,8 @@ def load_data(vlen, dtype):
     cluster_number = [{}, {}]
     # packet size -> [(packet number, giops, gbps)]
     cluster_size = [{}, {}]
-
+    # max throughput across all traces
+    max_tput = 0
     #### fit data
     # number of participating hpus -> [spin_time]
     # mean of local spin time vs. remote spin time (hpuid >= 8)
@@ -107,45 +157,25 @@ def load_data(vlen, dtype):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
-    max_tput = 0
-    def parse_trace(is_fit, p, s):
-        nonlocal cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
-
-        try:
-            batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype)
-        except FileNotFoundError as e:
-            print(f'missing trace: {e}')
-            return
-        max_tput = max(gbps, max_tput)
-
-        is_fit = int(is_fit)
-        if p not in cluster_number[is_fit]:
-            cluster_number[is_fit][p] = [(s, giops, gbps)]
-        else:
-            cluster_number[is_fit][p] += [(s, giops, gbps)]
-
-        if s not in cluster_size[is_fit]:
-            cluster_size[is_fit][s] = [(p, giops, gbps)]
-        else:
-            cluster_size[is_fit][s] += [(p, giops, gbps)]
-
-        if is_fit:
-            nhpus = len(lock_acc)
-            if nhpus not in spin_ratio_map:
-                spin_ratio_map[nhpus] = []
-
-            for id, durs in lock_acc.items():
-                is_remote = id >= 8
-                wait_sum = 0
-                for dur in durs:
-                    spin_map = spin_map.append({'nhpus': nhpus, 'dur': dur, 'is_remote': is_remote}, ignore_index=True)
-                    wait_sum += dur
-                spin_ratio_map[nhpus] += [(wait_sum / time_ns, p, s)]
-
+    async_result_list = []
     for p, s in product(P_CANDIDATES, S_CANDIDATES):
-        parse_trace(False, p, s)
+        async_result_list.append(pool.apply_async(parse_trace, (False, p, s, vlen, dtype)))
         if p <= P_CUTOFF:
-            parse_trace(True, p, s)
+            async_result_list.append(pool.apply_async(parse_trace, (True, p, s, vlen, dtype)))
+
+    for ar in async_result_list:
+        cn, cs, sm, sr, mt = ar.get()
+        cluster_number[0] |= cn[0]
+        cluster_number[1] |= cn[1]
+        cluster_size[0] |= cs[0]
+        cluster_size[1] |= cs[1]
+        spin_map = spin_map.append(sm, ignore_index=True)
+        for k, v in sr.items():
+            if k not in spin_ratio_map:
+                spin_ratio_map[k] = v
+            else:
+                spin_ratio_map[k] += v
+        max_tput = max(max_tput, mt)
 
     res = max_tput, cluster_number, cluster_size, spin_map, spin_ratio_map
     with open(f'dump_{vlen}_{dtype}.pickle', 'wb') as f:
@@ -222,13 +252,15 @@ def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spi
     #ax.yaxis.set_ticks()
     fig.savefig(f'{CHARTS_OUTPUT}/spin_duration-{vlen}-{dtype}.pdf')
 
-def intra_vd(vlen, dtype):
-    dat = load_data(vlen, dtype)
+def intra_vd(pool, vlen, dtype):
+    dat = load_data(pool, vlen, dtype)
     plot_data(vlen, dtype, *dat)
 
-for vlen in VLEN_CANDIDATES:
-    for dtype in SIZE_MAP.keys():
-        intra_vd(vlen, dtype)
+if __name__ == '__main__':
+    with Pool() as pool:
+        for vlen in VLEN_CANDIDATES:
+            for dtype in SIZE_MAP.keys():
+                intra_vd(pool, vlen, dtype)
 
-for (vlen, dtype), tput in max_tput_map:
-    print(f'VLEN={vlen}\tDTYPE={dtype}\ttput Gbps')
+    for (vlen, dtype), tput in max_tput_map:
+        print(f'VLEN={vlen}\tDTYPE={dtype}\ttput Gbps')
