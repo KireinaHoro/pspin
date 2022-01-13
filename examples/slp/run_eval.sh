@@ -3,6 +3,7 @@
 EXEC=./sim_slp_l1
 TRACEVIS=$HOME/work/pspin/sw/scripts/tracevis/parse.pl
 OUT_DATA=$PWD/data/
+BUILD_LOCK=$PWD/build.lck
 
 mkdir -p $OUT_DATA
 
@@ -41,12 +42,18 @@ run_with_lock() {
 N=$(nproc)
 open_sem $N
 
-build() {
-    make all DTYPE=$1 VLEN=$2 || die "Build failed for DTYPE=$1 VLEN=$2"
-    mkdir -p eval-$2-$1
-    riscv32-unknown-elf-objdump -d build/slp_l1 > $OUT_DATA/$2-$1.disasm
-    mv build sim_slp_l1 eval-$2-$1
-    rm sim_slp_l1_debug
+try_build() {
+    (
+        flock 9
+        if [[ -d eval-$2-$1 ]]; then
+            exit 0
+        fi
+        make all DTYPE=$1 VLEN=$2 || die "Build failed for DTYPE=$1 VLEN=$2"
+        mkdir eval-$2-$1 || die "Target already exists for DTYPE=$1 VLEN=$2"
+        riscv32-unknown-elf-objdump -d build/slp_l1 > $OUT_DATA/$2-$1.disasm
+        mv build sim_slp_l1 eval-$2-$1
+        rm sim_slp_l1_debug
+    ) 9>build.lck
 }
 
 run() {
@@ -58,6 +65,7 @@ run() {
         echo "<<< Skipped $1 $2 p=$3 s=$4 $5"
         return 0
     fi
+    try_build $1 $2
     cp -R eval-$2-$1 /tmp/$trial_name
     pushd /tmp/$trial_name
     echo ">>> Evaluating $1 $2 p=$3 s=$4 $5"
@@ -75,12 +83,11 @@ run() {
 
 source ../../sourceme.sh
 
-for dt in $dtype_candidates; do
-    for vl in $vlen_candidates; do
-        build $dt $vl
-        for p in $p_candidates; do
-            for s in $s_candidates; do
-                for m in $mode_candidates; do
+for m in $mode_candidates; do
+    for p in $p_candidates; do
+        for s in $s_candidates; do
+            for vl in $vlen_candidates; do
+                for dt in $dtype_candidates; do
                     run_with_lock run $dt $vl $p $s $m
                 done
             done
