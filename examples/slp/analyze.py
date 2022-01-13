@@ -28,7 +28,7 @@ SIZE_MAP = {
 P_CANDIDATES = [2 ** k for k in range(3, 11)]
 S_CANDIDATES = [128, 256, 512, 1024]
 P_CUTOFF = 256
-VLEN_CANDIDATES = [2 ** k for k in range(3, 8)]
+VLEN_CANDIDATES = [2 ** k for k in range(3, 6)]
 
 CHARTS_OUTPUT = 'charts/'
 system(f'mkdir -p {CHARTS_OUTPUT}')
@@ -111,6 +111,7 @@ def parse_trace(is_fit, p, s, vlen, dtype):
         print(f'missing trace: {e}')
         return
     max_tput = max(gbps, max_tput)
+    print(f'max_tput: {max_tput}')
 
     is_fit = int(is_fit)
     if p not in cluster_number[is_fit]:
@@ -187,6 +188,8 @@ def combine_results(arlist, vlen, dtype):
             else:
                 spin_ratio_map[k] += v
         max_tput = max(max_tput, mt)
+        print(f'max_tput: {max_tput}')
+        del res
 
     res = max_tput, cluster_number, cluster_size, spin_map, spin_ratio_map
     with open(f'dump_{vlen}_{dtype}.pickle', 'wb') as f:
@@ -287,5 +290,5 @@ if __name__ == '__main__':
             for dtype in SIZE_MAP.keys():
                 consume_data(armap, vlen, dtype)
 
-    for (vlen, dtype), tput in max_tput_map:
-        print(f'VLEN={vlen}\tDTYPE={dtype}\ttput Gbps')
+    for (vlen, dtype), tput in max_tput_map.items():
+        print(f'VLEN={vlen}\tDTYPE={dtype}\t{tput} Gbps')

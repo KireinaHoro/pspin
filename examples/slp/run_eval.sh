@@ -7,7 +7,7 @@ OUT_DATA=$PWD/data/
 mkdir -p $OUT_DATA
 
 dtype_candidates="int8_t int16_t int32_t float"
-vlen_candidates="8 16 32 64 128"
+vlen_candidates="8 16 32"
 mode_candidates="predict fit"
 p_candidates="8 16 32 64 128 256 512 1024"
 s_candidates="128 256 512 1024"
