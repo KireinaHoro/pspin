@@ -44,6 +44,7 @@ open_sem $N
 build() {
     make all DTYPE=$1 VLEN=$2 || die "Build failed for DTYPE=$1 VLEN=$2"
     mkdir -p eval-$2-$1
+    riscv32-unknown-elf-objdump -d build/slp_l1 > $OUT_DATA/$2-$1.disasm
     mv build sim_slp_l1 eval-$2-$1
     rm sim_slp_l1_debug
 }
