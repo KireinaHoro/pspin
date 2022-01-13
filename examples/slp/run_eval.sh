@@ -54,6 +54,10 @@ run() {
         return 0 # cutoff
     fi
     trial_name=eval-$2-$1-p$3-s$4-$5
+    if [[ -f $OUT_DATA/$trial_name.json.gz ]]; then
+        echo "<<< Skipped $1 $2 p=$3 s=$4 $5"
+        return 0
+    fi
     cp -R eval-$2-$1 $trial_name
     pushd $trial_name
     echo ">>> Evaluating $1 $2 p=$3 s=$4 $5"
