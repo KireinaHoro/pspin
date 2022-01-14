@@ -1,1 +1,5 @@
 eval-*/
+*.pickle
+build.lck
+charts/
+data/
