@@ -33,16 +33,19 @@ VLEN_CANDIDATES = [2 ** k for k in range(3, 6)]
 CHARTS_OUTPUT = 'charts/'
 system(f'mkdir -p {CHARTS_OUTPUT}')
 
-LOAD_ARCHIVE = True
-
-def single_trace(is_fit, p, s, vec_len, dtype):
+def single_trace(is_fit, p, s, vec_len, dtype, old_missing):
     ty = 'fit' if is_fit else 'predict'
     base = f'data/eval-{vec_len}-{dtype}-p{p}-s{s}-{ty}'
     trace_gz = f'{base}.json.gz'
 
     if getsize(trace_gz) > 80 * 2 ** 20: # 80MB
-        raise RuntimeError(f'{trace_gz} larger than 80 MB')
-    with gzip.open(f'{base}.json.gz') as f:
+        e = RuntimeError(f'{trace_gz} larger than 80 MB')
+        e.filename = trace_gz
+        raise e
+    if old_missing and trace_gz not in old_missing:
+        print(f'skipping trace {trace_gz}')
+        return
+    with gzip.open(trace_gz) as f:
         trace = f.read()
     print(f'parsing trace {base}')
 
@@ -90,7 +93,7 @@ def single_trace(is_fit, p, s, vec_len, dtype):
 
     return batch, good_payload, giops, good_put_gbps, lock_acc, time_ns
 
-def parse_trace(is_fit, p, s, vlen, dtype):
+def parse_trace(is_fit, p, s, vlen, dtype, old_missing):
     #### predict data
     # packet number -> [(packet size, giops, gbps)]
     cluster_number = [{}, {}]
@@ -105,10 +108,16 @@ def parse_trace(is_fit, p, s, vlen, dtype):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
+    # missing list, for adding new traces
+    missing = []
+
     try:
-        batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype)
+        batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype, old_missing)
     except (FileNotFoundError, RuntimeError) as e:
         print(f'missing trace: {e}')
+        missing.append(e.filename)
+        return
+    except TypeError: # the trace is skipped
         return
     max_tput = max(gbps, max_tput)
     print(f'max_tput: {max_tput}')
@@ -138,27 +147,28 @@ def parse_trace(is_fit, p, s, vlen, dtype):
             spin_ratio_map[nhpus] += [(wait_sum / time_ns, p, s)]
 
     print('finished parsing trace')
-    return cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
+    return missing, cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
 
 def load_data(pool, vlen, dtype, armap):
     arlist = []
     armap[vlen, dtype] = arlist
-    if LOAD_ARCHIVE:
-        try:
-            with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
-                fut = Future()
-                res = pickle.load(f)
-                fut.set_result(res)
-                arlist.append(fut)
-        except (FileNotFoundError, EOFError):
-            print(f'Parsed archive not found for {vlen} {dtype}, reloading')
+    missing = None
+    try:
+        with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
+            fut = Future()
+            res = pickle.load(f)
+            fut.set_result(res)
+            arlist.append(fut)
+            missing = res[0]
+    except (FileNotFoundError, EOFError):
+        print(f'Parsed archive not found for {vlen} {dtype}, reloading')
 
     print(f'spawning for VLEN={vlen} DTYPE={dtype}')
 
     for p, s in product(P_CANDIDATES, S_CANDIDATES):
-        arlist.append(pool.submit(parse_trace, False, p, s, vlen, dtype))
+        arlist.append(pool.submit(parse_trace, False, p, s, vlen, dtype, missing))
         if p <= P_CUTOFF:
-            arlist.append(pool.submit(parse_trace, True, p, s, vlen, dtype))
+            arlist.append(pool.submit(parse_trace, True, p, s, vlen, dtype, missing))
 
 def combine_results(arlist, vlen, dtype):
     #### predict data
@@ -175,11 +185,13 @@ def combine_results(arlist, vlen, dtype):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
+    missing = []
+
     for ar in as_completed(arlist):
         res = ar.result()
         if not res:
             continue
-        cn, cs, sm, sr, mt = res
+        ms, cn, cs, sm, sr, mt = res
         cluster_number[0] |= cn[0]
         cluster_number[1] |= cn[1]
         cluster_size[0] |= cs[0]
@@ -191,10 +203,10 @@ def combine_results(arlist, vlen, dtype):
             else:
                 spin_ratio_map[k] += v
         max_tput = max(max_tput, mt)
+        missing += ms
         print(f'max_tput: {max_tput}')
-        del res
 
-    res = max_tput, cluster_number, cluster_size, spin_map, spin_ratio_map
+    res = missing, cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
     with open(f'dump_{vlen}_{dtype}.pickle', 'wb') as f:
         pickle.dump(res, f)
 
@@ -202,7 +214,7 @@ def combine_results(arlist, vlen, dtype):
     return res
 
 max_tput_map = {}
-def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spin_ratio_map):
+def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput):
     max_tput_map[vlen, dtype] = max_tput
     def do_lines(x, xlabel, y_tagged_l, ylabel, title):
         fig, ax = plt.subplots(figsize=(5, 2.7), layout='constrained')
@@ -219,6 +231,7 @@ def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spi
         ax.set_title(f'{title} | VLEN={vlen} {dtype}')
         ax.legend()
         fig.savefig(f'{CHARTS_OUTPUT}/{title}-{vlen}-{dtype}.pdf')
+        plt.close(fig)
 
     # Predict: packet number - packet size - Gbps
     xdata = S_CANDIDATES
@@ -260,6 +273,7 @@ def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spi
     ax.set_xlabel('nhpus')
     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
     fig.savefig(f'{CHARTS_OUTPUT}/spin_ratio-{vlen}-{dtype}.pdf')
+    plt.close(fig)
 
     # Fit: spin map violin plot
     # transform y data into log scale, plot linearly, use antilog labels
@@ -270,6 +284,7 @@ def plot_data(vlen, dtype, max_tput, cluster_number, cluster_size, spin_map, spi
     ax.yaxis.set_major_formatter(StrMethodFormatter('$10^{{{x:.0f}}}$'))
     #ax.yaxis.set_ticks()
     fig.savefig(f'{CHARTS_OUTPUT}/spin_duration-{vlen}-{dtype}.pdf')
+    plt.close(fig)
 
 def consume_data(armap, vlen, dtype):
     arlist = armap[vlen, dtype]
@@ -280,11 +295,7 @@ def consume_data(armap, vlen, dtype):
         print(f'failed to plot something for VLEN={vlen} DTYPE={dtype}: {e}')
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] == 'reload':
-        print('Ignoring archives')
-        LOAD_ARCHIVE = False
-
-    with ProcessPoolExecutor(max_workers=8) as pool:
+    with ProcessPoolExecutor(max_workers=4) as pool:
         armap = {}
         for vlen in VLEN_CANDIDATES:
             for dtype in SIZE_MAP.keys():
