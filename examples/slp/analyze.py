@@ -5,7 +5,7 @@ import gzip
 import sys
 import pickle
 from parse import parse
-from os.path import join, getsize
+from os.path import join, getsize, getmtime
 from os import system
 from itertools import product
 from concurrent.futures.process import ProcessPoolExecutor
@@ -34,18 +34,14 @@ CHARTS_OUTPUT = 'charts/'
 system(f'mkdir -p {CHARTS_OUTPUT}')
 
 STYLE = {'figsize': (5, 2.7), 'layout': 'constrained'}
-def single_trace(is_fit, p, s, vec_len, dtype, old_missing):
+
+def single_trace(is_fit, p, s, vec_len, dtype):
     ty = 'fit' if is_fit else 'predict'
     base = f'data/eval-{vec_len}-{dtype}-p{p}-s{s}-{ty}'
     trace_gz = f'{base}.json.gz'
 
     if getsize(trace_gz) > 80 * 2 ** 20: # 80MB
-        e = RuntimeError(f'{trace_gz} larger than 80 MB')
-        e.filename = trace_gz
-        raise e
-    if old_missing and trace_gz not in old_missing:
-        print(f'skipping trace {trace_gz}')
-        return
+        raise RuntimeError(f'{trace_gz} larger than 80 MB')
     with gzip.open(trace_gz) as f:
         trace = f.read()
     print(f'parsing trace {base}')
@@ -94,7 +90,7 @@ def single_trace(is_fit, p, s, vec_len, dtype, old_missing):
 
     return batch, good_payload, giops, good_put_gbps, lock_acc, time_ns
 
-def parse_trace(is_fit, p, s, vlen, dtype, old_missing):
+def parse_trace(is_fit, p, s, vlen, dtype):
     #### predict data
     # packet number -> [(packet size, giops, gbps)]
     cluster_number = [{}, {}]
@@ -109,14 +105,10 @@ def parse_trace(is_fit, p, s, vlen, dtype, old_missing):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
-    # missing list, for adding new traces
-    missing = []
-
     try:
-        batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype, old_missing)
+        batch, pld_size, giops, gbps, lock_acc, time_ns = single_trace(is_fit, p, s, vlen, dtype)
     except (FileNotFoundError, RuntimeError) as e:
         print(f'missing trace: {e}')
-        missing.append(e.filename)
         return
     except TypeError: # the trace is skipped
         return
@@ -148,28 +140,27 @@ def parse_trace(is_fit, p, s, vlen, dtype, old_missing):
             spin_ratio_map[nhpus] += [(wait_sum / time_ns, p, s)]
 
     print('finished parsing trace')
-    return missing, cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
+    return cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
 
 def load_data(pool, vlen, dtype, armap):
     arlist = []
     armap[vlen, dtype] = arlist
-    missing = None
     try:
         with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
             fut = Future()
             res = pickle.load(f)
             fut.set_result(res)
             arlist.append(fut)
-            missing = res[0]
+            return
     except (FileNotFoundError, EOFError):
         print(f'Parsed archive not found for {vlen} {dtype}, reloading')
 
     print(f'spawning for VLEN={vlen} DTYPE={dtype}')
 
     for p, s in product(P_CANDIDATES, S_CANDIDATES):
-        arlist.append(pool.submit(parse_trace, False, p, s, vlen, dtype, missing))
+        arlist.append(pool.submit(parse_trace, False, p, s, vlen, dtype))
         if p <= P_CUTOFF:
-            arlist.append(pool.submit(parse_trace, True, p, s, vlen, dtype, missing))
+            arlist.append(pool.submit(parse_trace, True, p, s, vlen, dtype))
 
 def combine_results(arlist, vlen, dtype):
     #### predict data
@@ -186,7 +177,6 @@ def combine_results(arlist, vlen, dtype):
     # number of participating hpus -> spin ratio
     spin_ratio_map = {}
 
-    missing = []
     def merge_dict_of_lists(result, part):
         for k, v in part.items():
             if k not in result:
@@ -198,7 +188,7 @@ def combine_results(arlist, vlen, dtype):
         res = ar.result()
         if not res:
             continue
-        ms, cn, cs, sm, sr, mt = res
+        cn, cs, sm, sr, mt = res
         merge_dict_of_lists(cluster_number[0], cn[0])
         merge_dict_of_lists(cluster_number[1], cn[1])
         merge_dict_of_lists(cluster_size[0], cs[0])
@@ -206,10 +196,9 @@ def combine_results(arlist, vlen, dtype):
         spin_map = spin_map.append(sm, ignore_index=True)
         merge_dict_of_lists(spin_ratio_map, sr)
         max_tput = max(max_tput, mt)
-        missing += ms
         print(f'max_tput: {max_tput}')
 
-    res = missing, cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
+    res = cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput
     with open(f'dump_{vlen}_{dtype}.pickle', 'wb') as f:
         pickle.dump(res, f)
 
