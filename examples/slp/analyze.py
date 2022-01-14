@@ -186,22 +186,24 @@ def combine_results(arlist, vlen, dtype):
     spin_ratio_map = {}
 
     missing = []
+    def merge_dict_of_lists(result, part):
+        for k, v in part.items():
+            if k not in result:
+                result[k] = v
+            else:
+                result[k] += v
 
     for ar in as_completed(arlist):
         res = ar.result()
         if not res:
             continue
         ms, cn, cs, sm, sr, mt = res
-        cluster_number[0] |= cn[0]
-        cluster_number[1] |= cn[1]
-        cluster_size[0] |= cs[0]
-        cluster_size[1] |= cs[1]
+        merge_dict_of_lists(cluster_number[0], cn[0])
+        merge_dict_of_lists(cluster_number[1], cn[1])
+        merge_dict_of_lists(cluster_size[0], cs[0])
+        merge_dict_of_lists(cluster_size[1], cs[1])
         spin_map = spin_map.append(sm, ignore_index=True)
-        for k, v in sr.items():
-            if k not in spin_ratio_map:
-                spin_ratio_map[k] = v
-            else:
-                spin_ratio_map[k] += v
+        merge_dict_of_lists(spin_ratio_map, sr)
         max_tput = max(max_tput, mt)
         missing += ms
         print(f'max_tput: {max_tput}')
