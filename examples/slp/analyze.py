@@ -9,7 +9,7 @@ from os.path import join, getsize
 from os import system
 from itertools import product
 from concurrent.futures.process import ProcessPoolExecutor
-from concurrent.futures import as_completed
+from concurrent.futures import as_completed, Future
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -146,7 +146,10 @@ def load_data(pool, vlen, dtype, armap):
     if LOAD_ARCHIVE:
         try:
             with open(f'dump_{vlen}_{dtype}.pickle', 'rb') as f:
-                return pickle.load(f)
+                fut = Future()
+                res = pickle.load(f)
+                fut.set_result(res)
+                arlist.append(fut)
         except (FileNotFoundError, EOFError):
             print(f'Parsed archive not found for {vlen} {dtype}, reloading')
 
