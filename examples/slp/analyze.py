@@ -33,6 +33,7 @@ VLEN_CANDIDATES = [2 ** k for k in range(3, 6)]
 CHARTS_OUTPUT = 'charts/'
 system(f'mkdir -p {CHARTS_OUTPUT}')
 
+STYLE = {'figsize': (5, 2.7), 'layout': 'constrained'}
 def single_trace(is_fit, p, s, vec_len, dtype, old_missing):
     ty = 'fit' if is_fit else 'predict'
     base = f'data/eval-{vec_len}-{dtype}-p{p}-s{s}-{ty}'
@@ -219,10 +220,10 @@ max_tput_map = {}
 def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_map, max_tput):
     max_tput_map[vlen, dtype] = max_tput
     def do_lines(x, xlabel, y_tagged_l, ylabel, title):
-        fig, ax = plt.subplots(figsize=(5, 2.7), layout='constrained')
+        fig, ax = plt.subplots(**STYLE)
         for y, yt in y_tagged_l:
             # pad to same length
-            padded_y = y + [0] * (len(x) - len(y))
+            padded_y = y + [float('nan')] * (len(x) - len(y))
             ax.plot(x, padded_y, label=yt)
         ax.set_xlabel(xlabel)
         ax.set_xscale('log', base=2)
@@ -236,14 +237,31 @@ def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_ma
         plt.close(fig)
 
     # Predict: packet number - packet size - Gbps
-    xdata = S_CANDIDATES
-    y_tagged = [([t[2] for t in v], str(k)) for k, v in cluster_number[0].items()]
-    do_lines(xdata, 'packet size/bytes', y_tagged, 'Gbps', 'Predict-#packets')
-
     # Predict: packet size - packet number - Gbps
-    xdata = P_CANDIDATES
-    y_tagged = [([t[2] for t in v], str(k)) for k, v in cluster_size[0].items()]
-    do_lines(xdata, 'packet number', y_tagged, 'Gbps', 'Predict-packet size')
+    fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, **STYLE)
+    for y, yt in [([t[2] for t in v], str(k)) for k, v in cluster_number[0].items()]:
+        # pad to same length
+        x = S_CANDIDATES
+        padded_y = y + [float('nan')] * (len(x) - len(y))
+        ax1.plot(x, padded_y, label=yt)
+    for y, yt in [([t[2] for t in v], str(k)) for k, v in cluster_size[0].items()]:
+        # pad to same length
+        x = P_CANDIDATES
+        padded_y = y + [float('nan')] * (len(x) - len(y))
+        ax2.plot(x, padded_y, label=yt)
+    fig.suptitle(f'VLEN={vlen} {dtype}')
+    ax1.set_xlabel('packet size/bytes')
+    ax1.set_xscale('log', base=2)
+    ax2.set_xlabel('packet number')
+    ax2.set_xscale('log', base=2)
+    ax1.set_ylabel('Gbps')
+    ax1.set_yscale('log', base=2)
+    for axis in [ax1.xaxis, ax1.yaxis, ax2.xaxis, ax2.yaxis]:
+        axis.set_major_formatter(ScalarFormatter())
+    ax1.legend()
+    ax2.legend()
+    fig.savefig(f'{CHARTS_OUTPUT}/predict-{vlen}-{dtype}.pdf')
+    plt.close(fig)
 
     # Fit: packet number - packet size - Gbps
     xdata = S_CANDIDATES
@@ -262,7 +280,7 @@ def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_ma
             to_df['nhpus'] += [k]
             to_df['spin_ratio'] += [dpt[0]]
     data = pd.DataFrame.from_dict(to_df)
-    fig, ax = plt.subplots(figsize=(5, 2.7), layout='constrained')
+    fig, ax = plt.subplots(**STYLE)
     ax.set_title(f'Spin ratio-#packets | VLEN={vlen} {dtype}')
     '''
     data, labels = [], []
@@ -280,7 +298,7 @@ def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_ma
     # Fit: spin map violin plot
     # transform y data into log scale, plot linearly, use antilog labels
     spin_map['dur'] = spin_map['dur'].map(lambda a: np.log10(a))
-    fig, ax = plt.subplots(figsize=(5, 2.7), layout='constrained')
+    fig, ax = plt.subplots(**STYLE)
     sns.violinplot(x='nhpus', y='dur', hue='is_remote', data=spin_map)
     ax.set_title(f'Spin duration | VLEN={vlen} {dtype}')
     ax.yaxis.set_major_formatter(StrMethodFormatter('$10^{{{x:.0f}}}$'))
@@ -305,6 +323,26 @@ if __name__ == '__main__':
         for vlen in VLEN_CANDIDATES:
             for dtype in SIZE_MAP.keys():
                 consume_data(armap, vlen, dtype)
+
+    # throughput bar plot
+    dtypes = ['int8_t', 'int16_t', 'int32_t', 'float']
+    vlens = [8, 16, 32]
+    vlen_datas = [[] for _ in vlens]
+    x = np.arange(len(dtypes))
+    width = 0.2
+
+    for idx, vl in enumerate(vlens):
+        for dt in dtypes:
+            vlen_datas[idx].append(max_tput_map[vl, dt])
+    fig, ax = plt.subplots(**STYLE)
+    for idx, (vdt, vlen) in enumerate(zip(vlen_datas, vlens)):
+        ax.bar(x + (idx - 1) * width, vdt, width, label=f'VLEN={vlen}')
+
+    ax.set_ylabel('Throughput/Gbps')
+    ax.set_xticks(x, dtypes)
+    ax.legend()
+    fig.savefig(f'{CHARTS_OUTPUT}/vlen-dtype-tput.pdf')
+    plt.close(fig)
 
     for (vlen, dtype), tput in max_tput_map.items():
         print(f'VLEN={vlen}\tDTYPE={dtype}\t{tput} Gbps')
