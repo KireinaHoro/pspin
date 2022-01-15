@@ -213,7 +213,7 @@ def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_ma
         for y, yt in y_tagged_l:
             # pad to same length
             padded_y = y + [float('nan')] * (len(x) - len(y))
-            ax.plot(x, padded_y, label=yt)
+            ax.plot(x, padded_y, label=yt, marker='o', markersize=3)
         ax.set_xlabel(xlabel)
         ax.set_xscale('log', base=2)
         ax.set_ylabel(ylabel)
@@ -232,12 +232,12 @@ def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_ma
         # pad to same length
         x = S_CANDIDATES
         padded_y = y + [float('nan')] * (len(x) - len(y))
-        ax1.plot(x, padded_y, label=yt)
+        ax1.plot(x, padded_y, label=yt, marker='o', markersize=3)
     for y, yt in [([t[2] for t in v], str(k)) for k, v in cluster_size[0].items()]:
         # pad to same length
         x = P_CANDIDATES
         padded_y = y + [float('nan')] * (len(x) - len(y))
-        ax2.plot(x, padded_y, label=yt)
+        ax2.plot(x, padded_y, label=yt, marker='o', markersize=3)
     fig.suptitle(f'VLEN={vlen} {dtype}')
     ax1.set_xlabel('packet size/bytes')
     ax1.set_xscale('log', base=2)
@@ -300,6 +300,8 @@ def consume_data(armap, vlen, dtype):
         print(f'failed to plot something for VLEN={vlen} DTYPE={dtype}: {e}')
 
 if __name__ == '__main__':
+    sns.color_palette("tab10")
+
     with ProcessPoolExecutor(max_workers=4) as pool:
         armap = {}
         for vlen in VLEN_CANDIDATES:
