@@ -269,30 +269,26 @@ def plot_data(vlen, dtype, cluster_number, cluster_size, spin_map, spin_ratio_ma
             to_df['nhpus'] += [k]
             to_df['spin_ratio'] += [dpt[0]]
     data = pd.DataFrame.from_dict(to_df)
-    fig, ax = plt.subplots(**STYLE)
-    ax.set_title(f'Spin ratio-#packets | VLEN={vlen} {dtype}')
-    '''
-    data, labels = [], []
-    for k, v in spin_ratio_map.items():
-        labels += [str(k)]
-        data += [[t[0] for t in v]]
-    ax.boxplot(data, labels=labels, notch=True)#, showfliers=False)
-    '''
-    sns.violinplot(x='nhpus', y='spin_ratio', data=data)
-    ax.set_xlabel('nhpus')
-    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
-    fig.savefig(f'{CHARTS_OUTPUT}/spin_ratio-{vlen}-{dtype}.pdf')
-    plt.close(fig)
 
     # Fit: spin map violin plot
     # transform y data into log scale, plot linearly, use antilog labels
     spin_map['dur'] = spin_map['dur'].map(lambda a: np.log10(a))
-    fig, ax = plt.subplots(**STYLE)
-    sns.violinplot(x='nhpus', y='dur', hue='is_remote', data=spin_map)
-    ax.set_title(f'Spin duration | VLEN={vlen} {dtype}')
-    ax.yaxis.set_major_formatter(StrMethodFormatter('$10^{{{x:.0f}}}$'))
-    #ax.yaxis.set_ticks()
-    fig.savefig(f'{CHARTS_OUTPUT}/spin_duration-{vlen}-{dtype}.pdf')
+
+    fig = plt.figure(**(STYLE | {'figsize': (5, 4)}))
+    gs = fig.add_gridspec(2, hspace=0)
+    ax1, ax2 = gs.subplots(sharex=True)
+    #fig, (ax1, ax2) = plt.subplots(2, sharex=True, **STYLE)
+    fig.suptitle(f'VLEN={vlen} {dtype}')
+    sns.violinplot(x='nhpus', y='spin_ratio', cut=0, data=data, ax=ax1)
+    sns.violinplot(x='nhpus', y='dur', cut=0, hue='is_remote', data=spin_map, ax=ax2)
+    #ax2.set_xlabel('nhpus')
+    ax1.yaxis.set_major_formatter(PercentFormatter(1.0))
+    ax2.yaxis.set_major_formatter(StrMethodFormatter('$10^{{{x:.0f}}}$'))
+    ax1.label_outer()
+    ax2.label_outer()
+    ax2.legend_.remove()
+
+    fig.savefig(f'{CHARTS_OUTPUT}/spin-violin-{vlen}-{dtype}.pdf')
     plt.close(fig)
 
 def consume_data(armap, vlen, dtype):
