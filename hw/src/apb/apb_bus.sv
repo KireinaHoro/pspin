@@ -98,6 +98,7 @@ module apb_bus #(
   // Validate parameters.
   // pragma translate_off
   `ifndef VERILATOR
+  `ifndef TARGET_SYNTHESIS
     initial begin: p_assertions
       assert (N_SLV >= 1) else $fatal(1, "The number of slave ports must be at least 1!");
       assert (ADDR_WIDTH >= 1) else $fatal(1, "The addr width must be at least 1!");
@@ -122,6 +123,7 @@ module apb_bus #(
         end
       end
     end
+  `endif
   `endif
   // pragma translate_on
 

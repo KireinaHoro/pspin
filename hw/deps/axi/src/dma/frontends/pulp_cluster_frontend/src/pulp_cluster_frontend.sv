@@ -102,9 +102,11 @@ module pulp_cluster_frontend #(
         logic               serialize;
     } burst_req_t;
 
+    `ifndef TARGET_SYNTHESIS
     // debug only: logfile
     integer log_file;
     string  log_file_name;
+    `endif
 
     // rr input
     transf_descr_t [NumRegs-1:0] transf_descr;
@@ -267,6 +269,7 @@ module pulp_cluster_frontend #(
 
     //---------NON SYNTHESIZABLE ---------------
     `ifndef VERILATOR
+    `ifndef TARGET_SYNTHESIS
     //pragma translate_off
     // log dma transfers to disk
     initial begin
@@ -357,6 +360,7 @@ module pulp_cluster_frontend #(
         end
     end
     //pragma translate_on
+    `endif
     `endif
     //---------NON SYNTHESIZABLE ---------------
 

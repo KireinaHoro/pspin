@@ -76,7 +76,8 @@ module pspin #(
   import pspin_cfg_pkg::host_resp_t;
   import pspin_cfg_pkg::L1_CLUSTER_BASE;
   import pspin_cfg_pkg::L1_CLUSTER_MEM_SIZE;
-  localparam int unsigned L2_SIZE = pulp_cluster_cfg_pkg::L2_SIZE;
+  // localparam int unsigned L2_SIZE = pulp_cluster_cfg_pkg::L2_SIZE;
+  import pulp_cluster_cfg_pkg::L2_SIZE;
 
   // Interface from NIC inbound
   req_t   ni_req;

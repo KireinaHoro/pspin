@@ -23,7 +23,7 @@ module pulp_cluster_ooc (
 
   // Slave Port
   // AW
-  input  addr_t         slv_aw_addr_i,
+  input  pulp_cluster_cfg_pkg::addr_t         slv_aw_addr_i,
   input  prot_t         slv_aw_prot_i,
   input  region_t       slv_aw_region_i,
   input  len_t          slv_aw_len_i,
@@ -34,7 +34,7 @@ module pulp_cluster_ooc (
   input  cache_t        slv_aw_cache_i,
   input  qos_t          slv_aw_qos_i,
   input  id_slv_t       slv_aw_id_i,
-  input  user_t         slv_aw_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         slv_aw_user_i,
   // used if ASYNC_INTF
   input  dc_buf_t       slv_aw_writetoken_i,
   output dc_buf_t       slv_aw_readpointer_o,
@@ -42,7 +42,7 @@ module pulp_cluster_ooc (
   input  logic          slv_aw_valid_i,
   output logic          slv_aw_ready_o,
   // AR
-  input  addr_t         slv_ar_addr_i,
+  input  pulp_cluster_cfg_pkg::addr_t         slv_ar_addr_i,
   input  prot_t         slv_ar_prot_i,
   input  region_t       slv_ar_region_i,
   input  len_t          slv_ar_len_i,
@@ -52,7 +52,7 @@ module pulp_cluster_ooc (
   input  cache_t        slv_ar_cache_i,
   input  qos_t          slv_ar_qos_i,
   input  id_slv_t       slv_ar_id_i,
-  input  user_t         slv_ar_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         slv_ar_user_i,
   // used if ASYNC_INTF
   input  dc_buf_t       slv_ar_writetoken_i,
   output dc_buf_t       slv_ar_readpointer_o,
@@ -60,9 +60,9 @@ module pulp_cluster_ooc (
   input  logic          slv_ar_valid_i,
   output logic          slv_ar_ready_o,
   // W
-  input  data_t         slv_w_data_i,
-  input  strb_t         slv_w_strb_i,
-  input  user_t         slv_w_user_i,
+  input  pulp_cluster_cfg_pkg::data_t         slv_w_data_i,
+  input  pulp_cluster_cfg_pkg::strb_t         slv_w_strb_i,
+  input  pulp_cluster_cfg_pkg::user_t         slv_w_user_i,
   input  logic          slv_w_last_i,
   // used if ASYNC_INTF
   input  dc_buf_t       slv_w_writetoken_i,
@@ -71,11 +71,11 @@ module pulp_cluster_ooc (
   input  logic          slv_w_valid_i,
   output logic          slv_w_ready_o,
   // R
-  output data_t         slv_r_data_o,
-  output resp_t         slv_r_resp_o,
+  output pulp_cluster_cfg_pkg::data_t         slv_r_data_o,
+  output axi_pkg::resp_t         slv_r_resp_o,
   output logic          slv_r_last_o,
   output id_slv_t       slv_r_id_o,
-  output user_t         slv_r_user_o,
+  output pulp_cluster_cfg_pkg::user_t         slv_r_user_o,
   // used if ASYNC_INTF
   output dc_buf_t       slv_r_writetoken_o,
   input  dc_buf_t       slv_r_readpointer_i,
@@ -83,9 +83,9 @@ module pulp_cluster_ooc (
   output logic          slv_r_valid_o,
   input  logic          slv_r_ready_i,
   // B
-  output resp_t         slv_b_resp_o,
+  output axi_pkg::resp_t         slv_b_resp_o,
   output id_slv_t       slv_b_id_o,
-  output user_t         slv_b_user_o,
+  output pulp_cluster_cfg_pkg::user_t         slv_b_user_o,
   // used if ASYNC_INTF
   output dc_buf_t       slv_b_writetoken_o,
   input  dc_buf_t       slv_b_readpointer_i,
@@ -95,7 +95,7 @@ module pulp_cluster_ooc (
 
   // Master Port
   // AW
-  output addr_t         mst_aw_addr_o,
+  output pulp_cluster_cfg_pkg::addr_t         mst_aw_addr_o,
   output prot_t         mst_aw_prot_o,
   output region_t       mst_aw_region_o,
   output len_t          mst_aw_len_o,
@@ -106,7 +106,7 @@ module pulp_cluster_ooc (
   output cache_t        mst_aw_cache_o,
   output qos_t          mst_aw_qos_o,
   output id_mst_t       mst_aw_id_o,
-  output user_t         mst_aw_user_o,
+  output pulp_cluster_cfg_pkg::user_t         mst_aw_user_o,
   // used if ASYNC_INTF
   output dc_buf_t       mst_aw_writetoken_o,
   input  dc_buf_t       mst_aw_readpointer_i,
@@ -114,7 +114,7 @@ module pulp_cluster_ooc (
   output logic          mst_aw_valid_o,
   input  logic          mst_aw_ready_i,
   // AR
-  output addr_t         mst_ar_addr_o,
+  output pulp_cluster_cfg_pkg::addr_t         mst_ar_addr_o,
   output prot_t         mst_ar_prot_o,
   output region_t       mst_ar_region_o,
   output len_t          mst_ar_len_o,
@@ -124,7 +124,7 @@ module pulp_cluster_ooc (
   output cache_t        mst_ar_cache_o,
   output qos_t          mst_ar_qos_o,
   output id_mst_t       mst_ar_id_o,
-  output user_t         mst_ar_user_o,
+  output pulp_cluster_cfg_pkg::user_t         mst_ar_user_o,
   // used if ASYNC_INTF
   output dc_buf_t       mst_ar_writetoken_o,
   input  dc_buf_t       mst_ar_readpointer_i,
@@ -132,9 +132,9 @@ module pulp_cluster_ooc (
   output logic          mst_ar_valid_o,
   input  logic          mst_ar_ready_i,
   // W
-  output data_t         mst_w_data_o,
-  output strb_t         mst_w_strb_o,
-  output user_t         mst_w_user_o,
+  output pulp_cluster_cfg_pkg::data_t         mst_w_data_o,
+  output pulp_cluster_cfg_pkg::strb_t         mst_w_strb_o,
+  output pulp_cluster_cfg_pkg::user_t         mst_w_user_o,
   output logic          mst_w_last_o,
   // used if ASYNC_INTF
   output dc_buf_t       mst_w_writetoken_o,
@@ -143,11 +143,11 @@ module pulp_cluster_ooc (
   output logic          mst_w_valid_o,
   input  logic          mst_w_ready_i,
   // R
-  input  data_t         mst_r_data_i,
-  input  resp_t         mst_r_resp_i,
+  input  pulp_cluster_cfg_pkg::data_t         mst_r_data_i,
+  input  axi_pkg::resp_t         mst_r_resp_i,
   input  logic          mst_r_last_i,
   input  id_mst_t       mst_r_id_i,
-  input  user_t         mst_r_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         mst_r_user_i,
   // used if ASYNC_INTF
   input  dc_buf_t       mst_r_writetoken_i,
   output dc_buf_t       mst_r_readpointer_o,
@@ -155,9 +155,9 @@ module pulp_cluster_ooc (
   input  logic          mst_r_valid_i,
   output logic          mst_r_ready_o,
   // B
-  input  resp_t         mst_b_resp_i,
+  input  axi_pkg::resp_t         mst_b_resp_i,
   input  id_mst_t       mst_b_id_i,
-  input  user_t         mst_b_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         mst_b_user_i,
   // used if ASYNC_INTF
   input  dc_buf_t       mst_b_writetoken_i,
   output dc_buf_t       mst_b_readpointer_o,
@@ -167,7 +167,7 @@ module pulp_cluster_ooc (
 
   // AXI4 DMA MASTER
   // WRITE ADDRESS CHANNEL
-  output addr_t         dma_aw_addr_o,
+  output pulp_cluster_cfg_pkg::addr_t         dma_aw_addr_o,
   output prot_t         dma_aw_prot_o,
   output region_t       dma_aw_region_o,
   output len_t          dma_aw_len_o,
@@ -178,12 +178,12 @@ module pulp_cluster_ooc (
   output cache_t        dma_aw_cache_o,
   output qos_t          dma_aw_qos_o,
   output id_dma_t       dma_aw_id_o,
-  output user_t         dma_aw_user_o,
+  output pulp_cluster_cfg_pkg::user_t         dma_aw_user_o,
   output logic          dma_aw_valid_o,
   input  logic          dma_aw_ready_i,
 
   // READ ADDRESS CHANNEL
-  output addr_t         dma_ar_addr_o,
+  output pulp_cluster_cfg_pkg::addr_t         dma_ar_addr_o,
   output prot_t         dma_ar_prot_o,
   output region_t       dma_ar_region_o,
   output len_t          dma_ar_len_o,
@@ -193,37 +193,37 @@ module pulp_cluster_ooc (
   output cache_t        dma_ar_cache_o,
   output qos_t          dma_ar_qos_o,
   output id_dma_t       dma_ar_id_o,
-  output user_t         dma_ar_user_o,
+  output pulp_cluster_cfg_pkg::user_t         dma_ar_user_o,
   output logic          dma_ar_valid_o,
   input  logic          dma_ar_ready_i,
 
   // WRITE DATA CHANNEL
   output data_dma_t     dma_w_data_o,
   output strb_dma_t     dma_w_strb_o,
-  output user_t         dma_w_user_o,
+  output pulp_cluster_cfg_pkg::user_t         dma_w_user_o,
   output logic          dma_w_last_o,
   output logic          dma_w_valid_o,
   input  logic          dma_w_ready_i,
 
   // READ DATA CHANNEL
   input  data_dma_t     dma_r_data_i,
-  input  resp_t         dma_r_resp_i,
+  input  axi_pkg::resp_t         dma_r_resp_i,
   input  logic          dma_r_last_i,
   input  id_dma_t       dma_r_id_i,
-  input  user_t         dma_r_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         dma_r_user_i,
   input  logic          dma_r_valid_i,
   output logic          dma_r_ready_o,
 
   // WRITE RESPONSE CHANNEL
-  input  resp_t         dma_b_resp_i,
+  input  axi_pkg::resp_t         dma_b_resp_i,
   input  id_dma_t       dma_b_id_i,
-  input  user_t         dma_b_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         dma_b_user_i,
   input  logic          dma_b_valid_i,
   output logic          dma_b_ready_o,
 
   //AXI4 NHI SLAVE
   // WRITE ADDRESS CHANNEL
-  input  addr_t         nhi_aw_addr_i,
+  input  pulp_cluster_cfg_pkg::addr_t         nhi_aw_addr_i,
   input  prot_t         nhi_aw_prot_i,
   input  region_t       nhi_aw_region_i,
   input  len_t          nhi_aw_len_i,
@@ -234,12 +234,12 @@ module pulp_cluster_ooc (
   input  cache_t        nhi_aw_cache_i,
   input  qos_t          nhi_aw_qos_i,
   input  id_dma_t       nhi_aw_id_i,
-  input  user_t         nhi_aw_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         nhi_aw_user_i,
   input  logic          nhi_aw_valid_i,
   output logic          nhi_aw_ready_o,
 
   // READ ADDRESS CHANNEL
-  input  addr_t         nhi_ar_addr_i,
+  input  pulp_cluster_cfg_pkg::addr_t         nhi_ar_addr_i,
   input  prot_t         nhi_ar_prot_i,
   input  region_t       nhi_ar_region_i,
   input  len_t          nhi_ar_len_i,
@@ -249,36 +249,36 @@ module pulp_cluster_ooc (
   input  cache_t        nhi_ar_cache_i,
   input  qos_t          nhi_ar_qos_i,
   input  id_dma_t       nhi_ar_id_i,
-  input  user_t         nhi_ar_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         nhi_ar_user_i,
   input  logic          nhi_ar_valid_i,
   output logic          nhi_ar_ready_o,
 
   // WRITE DATA CHANNEL
   input  data_dma_t     nhi_w_data_i,
   input  strb_dma_t     nhi_w_strb_i,
-  input  user_t         nhi_w_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         nhi_w_user_i,
   input  logic          nhi_w_last_i,
   input  logic          nhi_w_valid_i,
   output logic          nhi_w_ready_o,
 
   // READ DATA CHANNEL
   output data_dma_t     nhi_r_data_o,
-  output resp_t         nhi_r_resp_o,
+  output axi_pkg::resp_t         nhi_r_resp_o,
   output logic          nhi_r_last_o,
   output id_dma_t       nhi_r_id_o,
-  output user_t         nhi_r_user_o,
+  output pulp_cluster_cfg_pkg::user_t         nhi_r_user_o,
   output logic          nhi_r_valid_o,
   input  logic          nhi_r_ready_i,
 
   // WRITE RESPONSE CHANNEL
-  output resp_t         nhi_b_resp_o,
+  output axi_pkg::resp_t         nhi_b_resp_o,
   output id_dma_t       nhi_b_id_o,
-  output user_t         nhi_b_user_o,
+  output pulp_cluster_cfg_pkg::user_t         nhi_b_user_o,
   output logic          nhi_b_valid_o,
   input  logic          nhi_b_ready_i,
 
   // Instruction Cache Master Port
-  output addr_t         icache_aw_addr_o,
+  output pulp_cluster_cfg_pkg::addr_t         icache_aw_addr_o,
   output prot_t         icache_aw_prot_o,
   output region_t       icache_aw_region_o,
   output len_t          icache_aw_len_o,
@@ -289,11 +289,11 @@ module pulp_cluster_ooc (
   output cache_t        icache_aw_cache_o,
   output qos_t          icache_aw_qos_o,
   output id_icache_t    icache_aw_id_o,
-  output user_t         icache_aw_user_o,
+  output pulp_cluster_cfg_pkg::user_t         icache_aw_user_o,
   output logic          icache_aw_valid_o,
   input  logic          icache_aw_ready_i,
 
-  output addr_t         icache_ar_addr_o,
+  output pulp_cluster_cfg_pkg::addr_t         icache_ar_addr_o,
   output prot_t         icache_ar_prot_o,
   output region_t       icache_ar_region_o,
   output len_t          icache_ar_len_o,
@@ -303,28 +303,28 @@ module pulp_cluster_ooc (
   output cache_t        icache_ar_cache_o,
   output qos_t          icache_ar_qos_o,
   output id_icache_t    icache_ar_id_o,
-  output user_t         icache_ar_user_o,
+  output pulp_cluster_cfg_pkg::user_t         icache_ar_user_o,
   output logic          icache_ar_valid_o,
   input  logic          icache_ar_ready_i,
 
   output data_icache_t  icache_w_data_o,
   output strb_icache_t  icache_w_strb_o,
-  output user_t         icache_w_user_o,
+  output pulp_cluster_cfg_pkg::user_t         icache_w_user_o,
   output logic          icache_w_last_o,
   output logic          icache_w_valid_o,
   input  logic          icache_w_ready_i,
 
   input  data_icache_t  icache_r_data_i,
-  input  resp_t         icache_r_resp_i,
+  input  axi_pkg::resp_t         icache_r_resp_i,
   input  logic          icache_r_last_i,
   input  id_icache_t    icache_r_id_i,
-  input  user_t         icache_r_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         icache_r_user_i,
   input  logic          icache_r_valid_i,
   output logic          icache_r_ready_o,
 
-  input  resp_t         icache_b_resp_i,
+  input  axi_pkg::resp_t         icache_b_resp_i,
   input  id_icache_t    icache_b_id_i,
-  input  user_t         icache_b_user_i,
+  input  pulp_cluster_cfg_pkg::user_t         icache_b_user_i,
   input  logic          icache_b_valid_i,
   output logic          icache_b_ready_o,
 

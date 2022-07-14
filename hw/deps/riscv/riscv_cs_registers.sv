@@ -1571,7 +1571,7 @@ end //PULP_SECURE
       // Programable HPM counters start at index 3
       
       if( (cnt_gidx == 1) || (cnt_gidx >= (NUM_MHPMCOUNTERS+3) ) ) begin : g_non_implemented
-        always_ff @(posedge clk, negedge rst_n) begin
+        always_ff @(posedge clk) begin
           mhpmcounter_q[cnt_gidx] <= 'b0;
         end
       end else begin : g_implemented
@@ -1592,12 +1592,12 @@ end //PULP_SECURE
     for(evt_gidx = 0; evt_gidx < 32; evt_gidx++) begin : g_mhpmevent
       // programable HPM events start at index3
       if( (evt_gidx < 3) || (evt_gidx >= (NUM_MHPMCOUNTERS+3) ) ) begin : g_non_implemented
-        always_ff @(posedge clk, negedge rst_n) begin
+        always_ff @(posedge clk) begin
           mhpmevent_q[evt_gidx] <= 'b0;
         end
       end else begin : g_implemented
         if(NUM_HPM_EVENTS < 32) begin
-          always_ff @(posedge clk, negedge rst_n) begin
+          always_ff @(posedge clk) begin
             mhpmevent_q[evt_gidx][31:NUM_HPM_EVENTS] <= 'b0;
           end
         end else begin
@@ -1619,7 +1619,7 @@ end //PULP_SECURE
   generate
     for(inh_gidx = 0; inh_gidx < 32; inh_gidx++) begin : g_mcountinhibit
       if( (inh_gidx == 1) || (inh_gidx >= (NUM_MHPMCOUNTERS+3) ) ) begin : g_non_implemented
-        always_ff @(posedge clk, negedge rst_n) begin
+        always_ff @(posedge clk) begin
           mcountinhibit_q[inh_gidx] <= 'b1; // default disable
         end
       end else begin : g_implemented
