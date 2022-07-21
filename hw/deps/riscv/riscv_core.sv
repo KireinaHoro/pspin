@@ -159,8 +159,8 @@ module riscv_core
   logic              is_compressed_id;
   logic              is_fetch_failed_id;
   logic              illegal_c_insn_id; // Illegal compressed instruction sent to ID stage
-  logic [31:0]       pc_if;             // Program counter in IF stage
-  logic [31:0]       pc_id;             // Program counter in ID stage
+  (* mark_debug = "true" *) logic [31:0]       pc_if;             // Program counter in IF stage
+  (* mark_debug = "true" *) logic [31:0]       pc_id;             // Program counter in ID stage
 
   logic              clear_instr_valid;
   logic              pc_set;
