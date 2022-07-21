@@ -921,7 +921,6 @@ module pulp_cluster
     .busy_o               ( s_per2axi_busy                    )
   );
 
-  /*
   tryx_ctrl #(
     .NB_CORES           ( NB_CORES       ),
     .AXI_USER_WIDTH     ( AXI_USER_WIDTH )
@@ -935,7 +934,6 @@ module pulp_cluster
     .periph_data_slave  ( s_core_periph_bus  ),
     .periph_data_master ( s_core_periph_tryx )
   );
-  */
 
   /* cluster (log + periph) interconnect and attached peripherals */
   cluster_interconnect_wrap #(
@@ -1256,18 +1254,6 @@ module pulp_cluster
       );
 
       // assign s_core_periph_bus[i].id = 1 << i;
-      assign s_core_periph_bus[i].req = s_core_periph_tryx[i].req;
-      assign s_core_periph_bus[i].add = s_core_periph_tryx[i].add;
-      assign s_core_periph_bus[i].wen = s_core_periph_tryx[i].wen;
-      assign s_core_periph_bus[i].wdata = s_core_periph_tryx[i].wdata;
-      assign s_core_periph_bus[i].be = s_core_periph_tryx[i].be;
-      assign s_core_periph_bus[i].id = s_core_periph_tryx[i].id;
-
-      assign s_core_periph_tryx[i].gnt = s_core_periph_bus[i].gnt;
-      assign s_core_periph_tryx[i].r_rdata = s_core_periph_bus[i].r_rdata;
-      assign s_core_periph_tryx[i].r_opc = s_core_periph_bus[i].r_opc;
-      assign s_core_periph_tryx[i].r_id = s_core_periph_bus[i].r_id;
-      assign s_core_periph_tryx[i].r_valid = s_core_periph_bus[i].r_valid;
     end
   endgenerate
 
