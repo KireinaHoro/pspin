@@ -63,22 +63,16 @@ module soc_peripherals #(
     .oup  (apb_periphs)
   );
 
-  `ifndef TARGET_SYNTHESIS
-    apb_stdout #(
-      .N_CORES    (N_CORES),
-      .N_CLUSTERS (N_CLUSTERS),
-      .ADDR_WIDTH (APB_AW),
-      .DATA_WIDTH (APB_DW)
-    ) i_stdout (
-      .clk_i,
-      .rst_ni,
-      .apb  (apb_periphs[1])
-    );
-  `else
-    assign apb_periphs[1].pready = 1'b1;
-    assign apb_periphs[1].pslverr = 1'b1;
-    assign apb_periphs[1].prdata = '0;
-  `endif
+  apb_stdout #(
+    .N_CORES    (N_CORES),
+    .N_CLUSTERS (N_CLUSTERS),
+    .ADDR_WIDTH (APB_AW),
+    .DATA_WIDTH (APB_DW)
+  ) i_stdout (
+    .clk_i,
+    .rst_ni,
+    .apb  (apb_periphs[1])
+  );
 
   soc_ctrl_regs #(
     .N_CORES    (N_CORES),
