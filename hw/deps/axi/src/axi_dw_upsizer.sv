@@ -209,7 +209,11 @@ module axi_dw_upsizer #(
     .resp_t     (axi_mst_resp_t),
     .NoMstPorts (2             ),
     .MaxTrans   (AxiMaxReads   ),
-    .SpillAw    (1'b1          ) // Required to break dependency between AW and W channels
+    .SpillAw    (1'b1          ),
+    .SpillW     (1'b1          ),
+    .SpillB     (1'b1          ),
+    .SpillAr    (1'b1          ),
+    .SpillR     (1'b1          )
   ) i_axi_demux (
     .clk_i          (clk_i                      ),
     .rst_ni         (rst_ni                     ),
