@@ -194,9 +194,14 @@ module apb_stdout #(
           end
           `endif
         end
-      end else begin
+      end
+      `ifndef TARGET_SYNTHESIS
+      `ifndef VERILATOR
+      else begin
         wr_en <= 'b0;
       end
+      `endif
+      `endif
     end
   end
 
