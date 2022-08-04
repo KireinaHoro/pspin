@@ -85,11 +85,11 @@ module dma_noc #(
     .NoSlvPorts     (NumClusters),
     .MaxWTrans      (8),  // TODO: calibrate
     .FallThrough    (1'b0),
-    .SpillAw        (1'b0),
-    .SpillW         (1'b0),
-    .SpillB         (1'b0),
-    .SpillAr        (1'b0),
-    .SpillR         (1'b0)
+    .SpillAw        (1'b1),
+    .SpillW         (1'b1),
+    .SpillB         (1'b1),
+    .SpillAr        (1'b1),
+    .SpillR         (1'b1)
   ) i_mux (
     .clk_i,
     .rst_ni,
