@@ -277,6 +277,8 @@ module riscv_decoder
     csr_op                      = CSR_OP_READ;
     mret_insn_o                 = 1'b0;
     uret_insn_o                 = 1'b0;
+    
+    stack_access_o              = 1'b0;
 
     dret_insn_o                 = 1'b0;
 

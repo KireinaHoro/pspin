@@ -566,6 +566,7 @@ module cluster_interconnect_wrap
       logic [3:0] amo;
       assign atop = s_sb_mux_amo_shim_atop[j][k];
       always_comb begin
+        amo = '0;
         data = s_sb_mux_amo_shim_wdata[j][k];
         if (atop[5]) begin
           unique casez (atop[4:0])
