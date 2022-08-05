@@ -18,13 +18,14 @@ PULP_INC=-I$(PULP_SDK)/runtime/libs/io/
 #SRC_FILES=$(PSPIN_RT)/src/hpu.c $(PSPIN_RT)/src/handler.c ${SPIN_APP_SRCS}
 SRC_FILES=$(PSPIN_RT)/runtime/src/hpu.c ${SPIN_APP_SRCS}
 
+L2_HND_N_BANKS ?= 16
 
-runtime-debug: 
+runtime-debug:
 	mkdir -p build/
 	$(CC) $(CFLAGS) -DLANGUAGE_ASSEMBLY $(INCLUDE_FILES) -c $(PULP_SDK)/kernel/riscv/rt/crt0.S -o build/crt0.o
 	$(CC) $(CFLAGS) ${SPIN_CFLAGS} $(PULP_INC) $(INCLUDE_FILES) $(PULP_SRCS) $(SRC_FILES) build/crt0.o -o $(TARGET_BIN) $(LDFLAGS)
 
-runtime: 
+runtime:
 	mkdir -p build/
 	$(CC) $(CFLAGS) -DLANGUAGE_ASSEMBLY -O3 -flto $(INCLUDE_FILES) -c $(PULP_SDK)/kernel/riscv/rt/crt0.S -o build/crt0.o
 	$(CC) $(CFLAGS) ${SPIN_CFLAGS} $(PULP_INC) $(INCLUDE_FILES) $(PULP_SRCS) $(SRC_FILES) build/crt0.o -o $(TARGET_BIN) $(LDFLAGS)
@@ -35,8 +36,8 @@ deploy::
 	$(OBJCOPY) --srec-len 1 --output-target=srec $(TARGET_BIN) build/$(SPIN_APP_NAME).s19
 	cd build/slm_files && \
 	$(PULP_SDK)/scripts/s19toslm.py ../$(SPIN_APP_NAME).s19 && \
-	$(PULP_SDK)/bin/slm_conv -n 16384 -f l2_hnd_stim.slm -S 1 -P 32 && \
-	python $(PULP_SDK)/bin/rename_l2.py hnd 
+	$(PULP_SDK)/bin/slm_conv -n 16384 -f l2_hnd_stim.slm -S 1 -P $(L2_HND_N_BANKS) && \
+	python $(PULP_SDK)/bin/rename_l2.py hnd
 	$(OBJDUMP) -S build/$(SPIN_APP_NAME) > build/$(SPIN_APP_NAME).disasm
 
 install:
