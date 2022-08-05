@@ -318,6 +318,14 @@ module pspin_verilator #(
     import pulp_cluster_cfg_pkg::N_TCDM_BANKS;
     import pulp_cluster_cfg_pkg::TCDM_WORDS_PER_BANK;
     import pspin_cfg_pkg::NUM_CLUSTERS;
+    import pspin_cfg_pkg::MEM_HND_SIZE;
+    import pspin_cfg_pkg::MEM_HND_N_PAR_CUTS;
+    import pspin_cfg_pkg::MEM_HND_CUT_N_WORDS;
+    import pspin_cfg_pkg::MEM_HND_CUT_DW;
+
+    localparam int unsigned MEM_HND_CUT_N_BITS = MEM_HND_CUT_DW * MEM_HND_CUT_N_WORDS;
+    localparam int unsigned MEM_HND_PAR_CUTS_N_BYTES = MEM_HND_N_PAR_CUTS * MEM_HND_CUT_N_BITS / 8;
+    localparam int unsigned MEM_HND_N_SER_CUTS = MEM_HND_SIZE / MEM_HND_PAR_CUTS_N_BYTES;
 
     import "DPI-C" function string get_slm_path();
 
@@ -398,8 +406,8 @@ module pspin_verilator #(
 
 
     //TODO: move number of rows and number of cols in configuration file!
-    for (genvar iRow = 0; iRow < 1; iRow++) begin: gen_fill_l2_hnd_rows
-        for (genvar iCol = 0; iCol < 32; iCol++) begin: gen_fill_l2_hnd_cols
+    for (genvar iRow = 0; iRow < MEM_HND_N_SER_CUTS; iRow++) begin: gen_fill_l2_hnd_rows
+        for (genvar iCol = 0; iCol < MEM_HND_N_PAR_CUTS; iCol++) begin: gen_fill_l2_hnd_cols
             initial begin
                 //$readmemh($sformatf("../sim_files/slm_files/l2_hnd_%01d_%01d.slm", iRow, iCol),
                 //$display($sformatf(get_l2_handler_slm_path(), iRow, iCol));
