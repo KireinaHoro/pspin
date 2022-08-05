@@ -290,7 +290,7 @@ module cluster_interconnect_wrap
     .ByteOffWidth ( $clog2(DATA_WIDTH-1)-3      ), // determine byte offset from real data width
     .AddrMemWidth ( ADDR_MEM_WIDTH              ),
     .WriteRespOn  ( 1                           ),
-    .RespLat      ( 1                           ),
+    .RespLat      ( 2                           ),
     .Topology     ( tcdm_interconnect_pkg::LIC  )
   ) i_tcdm_interconnect (
     .clk_i,
