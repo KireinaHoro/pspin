@@ -17,7 +17,7 @@ package apu_package;
 
    import apu_core_package::*;
 
-   parameter FPU                 = 1;
+   parameter FPU                 = 0;
    
    parameter SHARED_FP           = 1;
    parameter SHARED_DSP_MULT     = SHARED_FP ? 1 : 0; // only available with shared FPU

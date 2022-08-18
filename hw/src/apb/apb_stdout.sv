@@ -174,8 +174,8 @@ module apb_stdout #(
       end
       `endif
       `else
-        din <= 'h0;
-        wr_en <= 'b0;
+        din <= 32'h0;
+        wr_en <= 1'b0;
       `endif
     end else begin
       if (apb.psel && apb.penable && apb.pwrite) begin
