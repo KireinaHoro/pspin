@@ -79,14 +79,14 @@ package automatic pspin_cfg_pkg;
   localparam int unsigned MEM_PROG_SIZE               = 32*1024;
 
   // L2 packet buffer
-  localparam int unsigned MEM_PKT_SIZE                = 2*1024*1024;
-  localparam int unsigned MEM_PKT_N_PAR_CUTS          = 16;
+  localparam int unsigned MEM_PKT_SIZE                = 1*1024*1024;
+  localparam int unsigned MEM_PKT_N_PAR_CUTS          = 8;
   localparam int unsigned MEM_PKT_CUT_N_WORDS         = 2048;
   localparam int unsigned MEM_PKT_CUT_DW              = 512;
 
   // L2 handler memory
-  localparam int unsigned MEM_HND_SIZE                = 2*1024*1024;
-  localparam int unsigned MEM_HND_N_PAR_CUTS          = 16;
+  localparam int unsigned MEM_HND_SIZE                = 1*1024*1024;
+  localparam int unsigned MEM_HND_N_PAR_CUTS          = 8;
   localparam int unsigned MEM_HND_CUT_N_WORDS         = 16384;
   localparam int unsigned MEM_HND_CUT_DW              = 64;
 
