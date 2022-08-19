@@ -166,13 +166,11 @@ module apb_stdout #(
     byte data;
     if (!rst_ni) begin
       `ifndef TARGET_SYNTHESIS
-      `ifndef VERILATOR
       for (int i_cl = 0; i_cl < N_CLUSTERS; i_cl++) begin
         for (int i_core = 0; i_core < N_CORES; i_core++) begin
           flush(i_cl, i_core);
         end
       end
-      `endif
       `else
         din <= 32'h0;
         wr_en <= 1'b0;
@@ -184,9 +182,7 @@ module apb_stdout #(
         if (cl_idx < N_CLUSTERS && core_idx < N_CORES) begin
           data = apb.pwdata & 32'hFF;
           `ifndef TARGET_SYNTHESIS
-          `ifndef VERILATOR
           append(cl_idx, core_idx, data);
-          `endif
           `else
           if (!wr_rst_busy) begin
             din <= data;
@@ -196,11 +192,9 @@ module apb_stdout #(
         end
       end
       `ifndef TARGET_SYNTHESIS
-      `ifndef VERILATOR
       else begin
         wr_en <= 'b0;
       end
-      `endif
       `endif
     end
   end
