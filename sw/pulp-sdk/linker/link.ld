@@ -5,9 +5,9 @@ ENTRY( _start )
 MEMORY
 {
   prog_mem          : ORIGIN = 0x1d000000, LENGTH = 0x8000
-  L2           		: ORIGIN = 0x1c000000, LENGTH = 0x00300000
-  L2_handler_data	: ORIGIN = 0x1c300000, LENGTH = 0x00100000
-  L2_queue     		: ORIGIN = 0x1c400000, LENGTH = 0x00400000
+  L2           		: ORIGIN = 0x1c000000, LENGTH = 0x000c0000
+  L2_handler_data	: ORIGIN = 0x1c0c0000, LENGTH = 0x00040000
+  L2_queue     		: ORIGIN = 0x1c100000, LENGTH = 0x00100000
   L1                 	: ORIGIN = 0x10000000, LENGTH = 0x00100000
   L1_aliased         	: ORIGIN = 0x1b000000, LENGTH = 0x00100000
 }
