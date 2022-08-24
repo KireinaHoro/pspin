@@ -24,10 +24,10 @@ module pspin #(
   output logic [N_CLUSTERS-1:0]           cl_eoc_o,
   output logic [N_CLUSTERS-1:0]           cl_busy_o,
 
-  AXI_BUS.Slave                           axi_ni_slv,    //NIC inbound slave port: to inject packets
-  AXI_BUS.Slave                           axi_no_slv,    //NIC outbound slave port: to read data to send out
-  AXI_BUS.Master                          axi_host_mst,  // Host master port: to write to host memory
-  AXI_BUS.Slave                           axi_host_slv,  // Host slave port: to let the host write to L2 prog mem and L2 handler mem
+  AXI_BUS.Slave  axi_ni_slv,    //NIC inbound slave port: to inject packets
+  AXI_BUS.Slave  axi_no_slv,    //NIC outbound slave port: to read data to send out
+  AXI_BUS.Master axi_host_mst,  // Host master port: to write to host memory
+  AXI_BUS.Slave  axi_host_slv,  // Host slave port: to let the host write to L2 prog mem and L2 handler mem
 
   //from pktgen
   output logic                            her_ready_o,
