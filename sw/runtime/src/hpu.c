@@ -67,7 +67,7 @@ void hpu_entry()
     uint32_t core_id = rt_core_id();
     uint32_t cluster_id = rt_cluster_id();
 
-    //printf("HPU (%lu, %lu) hello\n", cluster_id, core_id);
+    printf("HPU (%lu, %lu) hello\n", cluster_id, core_id);
 
     if (core_id == 0 && cluster_id==0) {
         handler_fn hh, ph, th;

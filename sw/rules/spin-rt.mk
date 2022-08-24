@@ -18,7 +18,7 @@ PULP_INC=-I$(PULP_SDK)/runtime/libs/io/
 #SRC_FILES=$(PSPIN_RT)/src/hpu.c $(PSPIN_RT)/src/handler.c ${SPIN_APP_SRCS}
 SRC_FILES=$(PSPIN_RT)/runtime/src/hpu.c ${SPIN_APP_SRCS}
 
-L2_HND_N_BANKS ?= 16
+L2_HND_N_BANKS ?= 8
 
 runtime-debug:
 	mkdir -p build/
