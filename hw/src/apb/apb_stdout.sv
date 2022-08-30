@@ -62,7 +62,7 @@ module apb_stdout #(
     .READ_DATA_WIDTH(32),      // DECIMAL
     .READ_MODE("fwft"),        // String
     .SIM_ASSERT_CHK(0),        // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-    .USE_ADV_FEATURES("0707"), // String
+    .USE_ADV_FEATURES("1707"), // String - enable data_valid
     .WAKEUP_TIME(0),           // DECIMAL
     .WRITE_DATA_WIDTH(32),     // DECIMAL
     .WR_DATA_COUNT_WIDTH(1)    // DECIMAL
@@ -142,14 +142,14 @@ module apb_stdout #(
                                     // signal causes data (on dout) to be read from the FIFO. Must be held
                                     // active-low when rd_rst_busy is active high.
 
-    .rst(rst),                     // 1-bit input: Reset: Must be synchronous to wr_clk. The clock(s) can be
+    .rst(!rst_ni),                  // 1-bit input: Reset: Must be synchronous to wr_clk. The clock(s) can be
                                     // unstable at the time of applying reset, but reset must be released only
                                     // after the clock(s) is/are stable.
 
     .sleep('b0),                 // 1-bit input: Dynamic power saving- If sleep is High, the memory/fifo
                                     // block is in power saving mode.
 
-    .wr_clk(clk),               // 1-bit input: Write clock: Used for write operation. wr_clk must be a
+    .wr_clk(clk_i),               // 1-bit input: Write clock: Used for write operation. wr_clk must be a
                                     // free running clock.
 
     .wr_en(wr_en)                  // 1-bit input: Write Enable: If the FIFO is not full, asserting this
@@ -162,8 +162,8 @@ module apb_stdout #(
   `endif
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
-    int unsigned cl_idx, core_idx;
-    byte data;
+    logic [7:0] cl_idx, core_idx;
+    logic [7:0] data;
     if (!rst_ni) begin
       `ifndef TARGET_SYNTHESIS
       for (int i_cl = 0; i_cl < N_CLUSTERS; i_cl++) begin
@@ -185,13 +185,13 @@ module apb_stdout #(
           append(cl_idx, core_idx, data);
           `else
           if (!wr_rst_busy) begin
-            din <= data;
+            din <= {cl_idx, core_idx, data};
             wr_en <= 'b1;
           end
           `endif
         end
       end
-      `ifndef TARGET_SYNTHESIS
+      `ifdef TARGET_SYNTHESIS
       else begin
         wr_en <= 'b0;
       end
