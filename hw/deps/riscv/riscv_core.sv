@@ -168,7 +168,7 @@ module riscv_core
   logic [2:0]        exc_pc_mux_id;     // Mux selector for exception PC
   logic [5:0]        m_exc_vec_pc_mux_id; // Mux selector for vectored IRQ PC
   logic [5:0]        u_exc_vec_pc_mux_id; // Mux selector for vectored IRQ PC
-  logic [5:0]        exc_cause;
+  (* mark_debug = "true" *) logic [5:0]        exc_cause;
   logic [1:0]        trap_addr_mux;
 
   // ID performance counter signals
