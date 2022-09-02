@@ -28,7 +28,7 @@ package automatic pspin_cfg_pkg;
   localparam int unsigned       C_MSGID_WIDTH           = 10;
   localparam int unsigned       C_ADDR_WIDTH            = AXI_AW;
   localparam int unsigned       C_HOST_ADDR_WIDTH       = HOST_AXI_AW;
-  localparam int unsigned       NUM_CLUSTERS            = 4;
+  localparam int unsigned       NUM_CLUSTERS            = 2;
   localparam int unsigned       NUM_CORES               = 8;
 
   //MPQ engine
@@ -86,8 +86,8 @@ package automatic pspin_cfg_pkg;
 
   // L2 handler memory
   localparam int unsigned MEM_HND_SIZE                = 1*1024*1024;
-  localparam int unsigned MEM_HND_N_PAR_CUTS          = 8;
-  localparam int unsigned MEM_HND_CUT_N_WORDS         = 16384;
+  localparam int unsigned MEM_HND_N_PAR_CUTS          = 32; // at least 32 banks: 2 * 2 * 8
+  localparam int unsigned MEM_HND_CUT_N_WORDS         = 4096;
   localparam int unsigned MEM_HND_CUT_DW              = 64;
 
   // Interface types
