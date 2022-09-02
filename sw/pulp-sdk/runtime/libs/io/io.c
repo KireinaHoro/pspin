@@ -20,8 +20,10 @@
 
 #include "tinyprintf.h"
 #include <stdarg.h>
+#include <stddef.h>
 #include "hal/pulp.h"
 #include <stdint.h>
+#include "util.h"
 
 static int errno;
 int *__errno() { return &errno; } 
@@ -105,8 +107,8 @@ void *memcpy(void *dst0, const void *src0, size_t len0)
 
 static void __rt_putc_stdout(char c)
 {
-  //*(uint32_t*)(long)(0x1A104000 + (hal_core_id() << 3) + (hal_cluster_id() << 7)) = c;
-  *(uint32_t*)(long)(0x1A104000) = c;
+  *(uint32_t*)(long)(0x1A104000 + (user_core_id() << 3) + (user_cluster_id() << 7)) = c;
+  // *(uint32_t*)(long)(0x1A104000) = c;
   // Poll while microblaze debug module's FIFo is full
   //while (pulp_read8(ARCHI_STDOUT_ADDR + 0x8) & 0x8);
   //*(uint32_t *)(long)(ARCHI_STDOUT_ADDR + STDOUT_PUTC_OFFSET + 0x4) = c;
@@ -142,6 +144,8 @@ int puts(const char *s) {
   return 0;
 }
 
+// avoid weird macro issues in ansi.h
+#undef putchar
 int putchar(int c) {
 
   tfp_putc(NULL, c);

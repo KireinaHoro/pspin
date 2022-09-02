@@ -19,7 +19,6 @@ module apb_stdout #(
   APB_BUS.Slave apb
 );
   `ifndef TARGET_SYNTHESIS
-  `ifndef VERILATOR
   byte buffer [N_CLUSTERS-1:0][N_CORES-1:0][$];
 
   function void flush(int unsigned i_cl, int unsigned i_core);
@@ -40,7 +39,6 @@ module apb_stdout #(
       buffer[i_cl][i_core].push_back(ch);
     end
   endfunction
-  `endif
   `else
   (* mark_debug = "true" *) logic data_valid, wr_ack;
   (* mark_debug = "true" *) logic [31:0] din, dout;
@@ -54,7 +52,7 @@ module apb_stdout #(
     .ECC_MODE("no_ecc"),       // String
     .FIFO_MEMORY_TYPE("auto"), // String
     .FIFO_READ_LATENCY(1),     // DECIMAL
-    .FIFO_WRITE_DEPTH(128),    // DECIMAL
+    .FIFO_WRITE_DEPTH(8192),    // DECIMAL
     .FULL_RESET_VALUE(0),      // DECIMAL
     .PROG_EMPTY_THRESH(10),    // DECIMAL
     .PROG_FULL_THRESH(10),     // DECIMAL
@@ -185,7 +183,7 @@ module apb_stdout #(
           append(cl_idx, core_idx, data);
           `else
           if (!wr_rst_busy) begin
-            din <= {cl_idx, core_idx, data};
+            din <= {8'b0, cl_idx, core_idx, data};
             wr_en <= 'b1;
           end
           `endif

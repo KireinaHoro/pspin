@@ -22,6 +22,16 @@
 
 #define ECALL_PSPIN_HANDLER_EXIT 0xa
 
+#if RISCV_VERSION >= 4 && !defined(RISCV_1_7)
+#if PULP_CHIP_FAMILY == CHIP_GAP
+  #define PULP_CSR_MHARTID 0x014
+#else
+  #define PULP_CSR_MHARTID 0xf14
+#endif
+#else
+  #define PULP_CSR_MHARTID 0xf10
+#endif
+
 #define PULP_CSR_MSTATUS 0x300
 #define PULP_CSR_MTVEC 0x305
 #define PULP_CSR_MEPC 0x341

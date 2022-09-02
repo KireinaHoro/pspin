@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#ifndef __UTIL_H__
+#define __UTIL_H__
 
 #include <stdio.h>
 
@@ -81,3 +82,17 @@ while (true) {\
 #else
 #define TRACING_DUMMY_INSTR() 
 #endif
+
+static inline __attribute__((always_inline)) unsigned int user_core_id() {
+    int hart_id;
+    read_register(tp, hart_id);
+    return hart_id & 0x01f;
+}
+
+static inline __attribute__((always_inline)) unsigned int user_cluster_id() {
+    int hart_id;
+    read_register(tp, hart_id);
+    return (hart_id >> 5) & 0x3f;
+}
+
+#endif // __UTIL_H__

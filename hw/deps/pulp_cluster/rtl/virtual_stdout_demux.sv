@@ -20,9 +20,11 @@ module virtual_stdout_demux #(
   output logic [5:0]      periph_mst_atop_o
 );
 
+/*
   `ifndef TARGET_SYNTHESIS
     `define VIRTUAL_STDOUT 
   `endif
+  */
   
   `ifndef VIRTUAL_STDOUT
     // When synthesizing, feed signals through to real stdout device.
