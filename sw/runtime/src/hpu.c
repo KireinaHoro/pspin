@@ -63,7 +63,12 @@ void hpu_entry() {
   uint32_t core_id = rt_core_id();
   uint32_t cluster_id = rt_cluster_id();
 
-  if (cluster_id == 0 && core_id == 1)
+  // save mhartid before first printf
+  uint32_t mhartid;
+  read_csr(PULP_CSR_MHARTID, mhartid);
+  write_register(tp, mhartid);
+
+  // if (cluster_id == 0 && core_id == 1)
   printf("HPU (%lu, %lu) hello\n", cluster_id, core_id);
 
   if (core_id == 0 && cluster_id == 0) {
@@ -80,10 +85,6 @@ void hpu_entry() {
   // we save these now because can't access them in user mode
   write_register(x10, cluster_id);
   write_register(x11, core_id);
-
-  uint32_t mhartid;
-  read_csr(PULP_CSR_MHARTID, mhartid);
-  write_register(tp, mhartid);
 
   // save the original sp in the HPU descr
   read_register(x2, hpu_descr[core_id]);
