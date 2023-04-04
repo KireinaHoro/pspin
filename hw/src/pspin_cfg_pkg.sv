@@ -32,7 +32,7 @@ package automatic pspin_cfg_pkg;
   localparam int unsigned       NUM_CORES               = 8;
 
   //MPQ engine
-  localparam int unsigned       NUM_MPQ                 = 256;
+  localparam int unsigned       NUM_MPQ                 = 16;
   localparam int unsigned       NUM_MPQ_CELLS           = 128;
   localparam int unsigned       NUM_MPQ_STATIC_CELLS    = 1; //per MPQ
 
