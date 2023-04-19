@@ -69,7 +69,7 @@ void hpu_entry() {
   write_register(tp, mhartid);
 
   // if (cluster_id == 0 && core_id == 1)
-  printf("HPU (%lu, %lu) hello\n", cluster_id, core_id);
+  printf("HPU (%lu, %lu) hello from %s\n", cluster_id, core_id, __func__);
 
   if (core_id == 0 && cluster_id == 0) {
     handler_fn hh, ph, th;
