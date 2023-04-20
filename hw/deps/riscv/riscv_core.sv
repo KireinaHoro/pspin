@@ -159,7 +159,7 @@ module riscv_core
   logic              is_compressed_id;
   logic              is_fetch_failed_id;
   logic              illegal_c_insn_id; // Illegal compressed instruction sent to ID stage
-  (* mark_debug = "true" *) logic [31:0]       pc_if;             // Program counter in IF stage
+  logic [31:0]       pc_if;             // Program counter in IF stage
   logic [31:0]       pc_id;             // Program counter in ID stage
 
   logic              clear_instr_valid;
@@ -168,7 +168,7 @@ module riscv_core
   logic [2:0]        exc_pc_mux_id;     // Mux selector for exception PC
   logic [5:0]        m_exc_vec_pc_mux_id; // Mux selector for vectored IRQ PC
   logic [5:0]        u_exc_vec_pc_mux_id; // Mux selector for vectored IRQ PC
-  (* mark_debug = "true" *) logic [5:0]        exc_cause;
+  logic [5:0]        exc_cause;
   logic [1:0]        trap_addr_mux;
 
   // ID performance counter signals

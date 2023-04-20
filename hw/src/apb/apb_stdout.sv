@@ -40,10 +40,10 @@ module apb_stdout #(
     end
   endfunction
   `else
-  (* mark_debug = "true" *) logic data_valid, wr_ack;
-  (* mark_debug = "true" *) logic [31:0] din, dout;
-  (* mark_debug = "true" *) logic empty, full, overflow, underflow;
-  (* mark_debug = "true" *) logic rd_en, wr_en, rd_rst_busy, wr_rst_busy;
+  logic data_valid, wr_ack;
+  logic [31:0] din, dout;
+  logic empty, full, overflow, underflow;
+  logic rd_en, wr_en, rd_rst_busy, wr_rst_busy;
   // xpm_fifo_sync: Synchronous FIFO
   // Xilinx Parameterized Macro, version 2020.2
 
