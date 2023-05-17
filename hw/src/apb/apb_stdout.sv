@@ -39,13 +39,45 @@ module apb_stdout #(
       buffer[i_cl][i_core].push_back(ch);
     end
   endfunction
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    logic [7:0] cl_idx, core_idx;
+    logic [7:0] data;
+    if (!rst_ni) begin
+      for (int i_cl = 0; i_cl < N_CLUSTERS; i_cl++) begin
+        for (int i_core = 0; i_core < N_CORES; i_core++) begin
+          flush(i_cl, i_core);
+        end
+      end
+    end else begin
+      if (apb.psel && apb.penable && apb.pwrite) begin
+        cl_idx = (apb.paddr >> 7) & 32'hF;
+        core_idx = (apb.paddr >> 3) & 32'hF;
+        if (cl_idx < N_CLUSTERS && core_idx < N_CORES) begin
+          data = apb.pwdata & 32'hFF;
+          append(cl_idx, core_idx, data);
+        end
+      end
+    end
+  end
+
+  assign apb.pready = 1'b1;
+
   `else
+
   logic data_valid, wr_ack;
   logic [31:0] din, dout;
   logic empty, full, overflow, underflow;
   logic rd_en, wr_en, rd_rst_busy, wr_rst_busy;
   // xpm_fifo_sync: Synchronous FIFO
   // Xilinx Parameterized Macro, version 2020.2
+
+  logic [7:0] cl_idx, core_idx;
+  logic [7:0] data;
+
+  assign cl_idx = (apb.paddr >> 7) & 32'hF;
+  assign core_idx = (apb.paddr >> 3) & 32'hF;
+  assign data = apb.pwdata & 32'hFF;
 
   xpm_fifo_sync #(
     .DOUT_RESET_VALUE("0"),    // String
@@ -156,50 +188,37 @@ module apb_stdout #(
 
   );
 
-  // End of xpm_fifo_sync_inst instantiation
-  `endif
-
   always_ff @(posedge clk_i or negedge rst_ni) begin
-    logic [7:0] cl_idx, core_idx;
-    logic [7:0] data;
-    if (!rst_ni) begin
-      `ifndef TARGET_SYNTHESIS
-      for (int i_cl = 0; i_cl < N_CLUSTERS; i_cl++) begin
-        for (int i_core = 0; i_core < N_CORES; i_core++) begin
-          flush(i_cl, i_core);
+    apb.pready <= !full;
+    
+    if (apb.psel && apb.penable && apb.pready && apb.pwrite) begin
+      if (cl_idx < N_CLUSTERS && core_idx < N_CORES) begin
+        if (!wr_rst_busy) begin
+          din <= {8'b0, cl_idx, core_idx, data};
+          wr_en <= 'b1;
+          apb.pready <= 1'b0;
         end
       end
-      `else
-        din <= 32'h0;
-        wr_en <= 1'b0;
-      `endif
     end else begin
-      if (apb.psel && apb.penable && apb.pwrite) begin
-        cl_idx = (apb.paddr >> 7) & 32'hF;
-        core_idx = (apb.paddr >> 3) & 32'hF;
-        if (cl_idx < N_CLUSTERS && core_idx < N_CORES) begin
-          data = apb.pwdata & 32'hFF;
-          `ifndef TARGET_SYNTHESIS
-          append(cl_idx, core_idx, data);
-          `else
-          if (!wr_rst_busy) begin
-            din <= {8'b0, cl_idx, core_idx, data};
-            wr_en <= 'b1;
-          end
-          `endif
-        end
-      end
-      `ifdef TARGET_SYNTHESIS
-      else begin
-        wr_en <= 'b0;
-      end
-      `endif
+      wr_en <= 'b0;
+    end
+
+    if (wr_ack) begin
+      apb.pready <= 1'b1;
+    end
+
+    if (!rst_ni) begin
+      din <= 32'h0;
+      wr_en <= 1'b0;
+      apb.pready <= 1'b0;
     end
   end
 
+  // End of xpm_fifo_sync_inst instantiation
+  `endif
+
   assign apb.prdata = '0;
   assign apb.pslverr = 1'b0;
-  assign apb.pready = 1'b1;
 
 
 endmodule

@@ -4,3 +4,5 @@
 */*.trace.txt
 */*.trace.json
 core
+.cache/
+compile_commands.json

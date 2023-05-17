@@ -67,9 +67,9 @@ __handler__ void pingpong_hh(handler_args_t *args) {
 }
 
 __handler__ void pingpong_ph(handler_args_t *args) {
-  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d)\n",
+  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d\n",
          args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-         lock_owner);
+         lock_owner, args->task->flow_id);
 
   task_t *task = args->task;
 
