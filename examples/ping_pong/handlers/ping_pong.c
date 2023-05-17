@@ -45,7 +45,7 @@ static inline void lock(handler_args_t *args) {
   int res;
   int counter = 0;
   do {
-    res = compare_and_swap(&lock_owner, 0, HPU_ID(args));
+    res = compare_and_swap(&lock_owner, 0, HPU_ID(args) + 1);
     if (res) {
       rt_time_wait_cycles(50);
       ++counter;
@@ -57,9 +57,7 @@ static inline void lock(handler_args_t *args) {
   } while (res);
 }
 
-static inline void unlock() {
-  amo_store(&lock_owner, 0);
-}
+static inline void unlock() { amo_store(&lock_owner, 0); }
 
 __handler__ void pingpong_hh(handler_args_t *args) {
   if (!HPU_ID(args)) {
@@ -69,8 +67,9 @@ __handler__ void pingpong_hh(handler_args_t *args) {
 }
 
 __handler__ void pingpong_ph(handler_args_t *args) {
-  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d)\n", args->task->pkt_mem,
-         args->task->l2_pkt_mem, args->task->pkt_mem_size, lock_owner);
+  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d)\n",
+         args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
+         lock_owner);
 
   task_t *task = args->task;
 
@@ -107,29 +106,22 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     printf("Host flag addr: %#llx\n", flag_haddr);
 
     // DMA packet data
-    lock(args);
-    printf("Inside dma lock\n");
     spin_dma_to_host(pld_haddr, (uint32_t)nic_pld_addr, pkt_pld_len, 1, &dma);
-    printf("Issued packet data DMA\n");
     do {
       spin_cmd_test(dma, &completed);
     } while (!completed);
-    unlock();
-
     printf("Written packet data\n");
 
+    // prepare host notification
     ++dma_idx[HPU_ID(args)];
-
     uint64_t flag_to_host =
         MKFLAG(dma_idx[HPU_ID(args)], pkt_pld_len, HPU_ID(args));
 
     // write flag
-    lock(args);
     spin_write_to_host(flag_haddr, flag_to_host, &dma);
     do {
       spin_cmd_test(dma, &completed);
     } while (!completed);
-    unlock();
     printf("Flag %#llx (id %#llx, len %lld) written to host\n", flag_to_host,
            FLAG_DMA_ID(flag_to_host), FLAG_LEN(flag_to_host));
 
