@@ -27,8 +27,8 @@
 #define PAGE_SIZE 4096
 #define HPU_ID(args) (args->cluster_id * NUM_HPUS_PER_CLUSTER + args->hpu_id)
 #define HOST_ADDR(args)                                                        \
-  ((((uint64_t)args->task->host_mem_high << 32) | args->task->host_mem_low) +  \
-   HPU_ID(args) * PAGE_SIZE)
+  (((uint64_t)args->task->host_mem_high << 32) | args->task->host_mem_low)
+#define HOST_ADDR_HPU(args) (HOST_ADDR(args) + HPU_ID(args) * PAGE_SIZE)
 
 #define FLAG_DMA_ID(fl) ((fl)&0xf)
 #define FLAG_LEN(fl) (((fl) >> 8) & 0xff)
@@ -100,12 +100,10 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   udp_hdr->dst_port = src_port;
 
   spin_cmd_t dma;
-  uint64_t flag_haddr = HOST_ADDR(args),
-           pld_haddr = HOST_ADDR(args) + sizeof(uint64_t);
+  uint64_t flag_haddr = HOST_ADDR_HPU(args),
+           pld_haddr = HOST_ADDR_HPU(args) + sizeof(uint64_t);
 
-  if (flag_haddr) {
-    bool completed = false;
-
+  if (HOST_ADDR(args) && args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
     printf("Host flag addr: %#llx\n", flag_haddr);
 
     // DMA packet data
