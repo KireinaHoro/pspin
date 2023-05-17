@@ -107,9 +107,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
     // DMA packet data
     spin_dma_to_host(pld_haddr, (uint32_t)nic_pld_addr, pkt_pld_len, 1, &dma);
-    do {
-      spin_cmd_test(dma, &completed);
-    } while (!completed);
+    spin_cmd_wait(dma);
     printf("Written packet data\n");
 
     // prepare host notification
@@ -119,9 +117,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
     // write flag
     spin_write_to_host(flag_haddr, flag_to_host, &dma);
-    do {
-      spin_cmd_test(dma, &completed);
-    } while (!completed);
+    spin_cmd_wait(dma);
     printf("Flag %#llx (id %#llx, len %lld) written to host\n", flag_to_host,
            FLAG_DMA_ID(flag_to_host), FLAG_LEN(flag_to_host));
 
@@ -136,9 +132,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     // DMA packet data back
     spin_dma_from_host(pld_haddr, (uint32_t)nic_pld_addr, host_pkt_len, 1,
                        &dma);
-    do {
-      spin_cmd_test(dma, &completed);
-    } while (!completed);
+    spin_cmd_wait(dma);
 
     printf("DMA roundtrip finished, packet from host size: %d\n", host_pkt_len);
     if (FLAG_HPU_ID(flag_from_host) != HPU_ID(args)) {
@@ -149,17 +143,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
   spin_cmd_t put;
   spin_send_packet(nic_pld_addr, pkt_pld_len, &put);
-
-  // It's not strictly necessary to wait. The hw will enforce that the feedback
-  // is not sent until all commands issued by this handlers are completed.
-#ifdef WAIT_POLL
-  bool completed = false;
-  do {
-    spin_cmd_test(put, &completed);
-  } while (!completed);
-#elif defined(WAIT_SUSPEND)
   spin_cmd_wait(put);
-#endif
 }
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
