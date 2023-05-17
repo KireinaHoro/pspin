@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "pspin.h"
 #include <handler.h>
 #include <packets.h>
 #include <spin_dma.h>
@@ -20,9 +21,56 @@
 #define FROM_L1
 #endif
 
+#define NUM_HPUS_PER_CLUSTER 8
+#define NUM_CLUSTERS 2
+#define NUM_HPUS (NUM_HPUS_PER_CLUSTER * NUM_CLUSTERS)
+#define PAGE_SIZE 4096
+#define HPU_ID(args) (args->cluster_id * NUM_HPUS_PER_CLUSTER + args->hpu_id)
+#define HOST_ADDR(args)                                                        \
+  ((((uint64_t)args->task->host_mem_high << 32) | args->task->host_mem_low) +  \
+   HPU_ID(args) * PAGE_SIZE)
+
+#define FLAG_DMA_ID(fl) ((fl)&0xf)
+#define FLAG_LEN(fl) (((fl) >> 8) & 0xff)
+#define FLAG_HPU_ID(fl) ((fl) >> 24 & 0xff)
+#define MKFLAG(id, len, hpuid)                                                 \
+  (((id)&0xf) | (((len)&0xff) << 8) | (((hpuid)&0xff) << 24))
+
+extern volatile uint64_t __host_flag[NUM_HPUS];
+static uint8_t dma_idx[NUM_HPUS];
+static volatile uint32_t lock_owner;
+
+// stock spinlock stuck at lock ??
+static inline void lock(handler_args_t *args) {
+  int res;
+  int counter = 0;
+  do {
+    res = compare_and_swap(&lock_owner, 0, HPU_ID(args));
+    if (res) {
+      rt_time_wait_cycles(50);
+      ++counter;
+      if (!(counter % 100000)) {
+        printf("Trying to lock...\n");
+        printf("Owner: %d @ %p\n", lock_owner, &lock_owner);
+      }
+    }
+  } while (res);
+}
+
+static inline void unlock() {
+  amo_store(&lock_owner, 0);
+}
+
+__handler__ void pingpong_hh(handler_args_t *args) {
+  if (!HPU_ID(args)) {
+    printf("Ping pong head handler\n");
+    amo_store(&lock_owner, 0);
+  }
+}
+
 __handler__ void pingpong_ph(handler_args_t *args) {
-  printf("Packet @ %p (L2: %p) (size %d)\n", args->task->pkt_mem,
-         args->task->l2_pkt_mem, args->task->pkt_mem_size);
+  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d)\n", args->task->pkt_mem,
+         args->task->l2_pkt_mem, args->task->pkt_mem_size, lock_owner);
 
   task_t *task = args->task;
 
@@ -50,6 +98,64 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   uint16_t src_port = udp_hdr->src_port;
   udp_hdr->src_port = udp_hdr->dst_port;
   udp_hdr->dst_port = src_port;
+
+  spin_cmd_t dma;
+  uint64_t flag_haddr = HOST_ADDR(args),
+           pld_haddr = HOST_ADDR(args) + sizeof(uint64_t);
+
+  if (flag_haddr) {
+    bool completed = false;
+
+    printf("Host flag addr: %#llx\n", flag_haddr);
+
+    // DMA packet data
+    lock(args);
+    printf("Inside dma lock\n");
+    spin_dma_to_host(pld_haddr, (uint32_t)nic_pld_addr, pkt_pld_len, 1, &dma);
+    printf("Issued packet data DMA\n");
+    do {
+      spin_cmd_test(dma, &completed);
+    } while (!completed);
+    unlock();
+
+    printf("Written packet data\n");
+
+    ++dma_idx[HPU_ID(args)];
+
+    uint64_t flag_to_host =
+        MKFLAG(dma_idx[HPU_ID(args)], pkt_pld_len, HPU_ID(args));
+
+    // write flag
+    lock(args);
+    spin_write_to_host(flag_haddr, flag_to_host, &dma);
+    do {
+      spin_cmd_test(dma, &completed);
+    } while (!completed);
+    unlock();
+    printf("Flag %#llx (id %#llx, len %lld) written to host\n", flag_to_host,
+           FLAG_DMA_ID(flag_to_host), FLAG_LEN(flag_to_host));
+
+    // poll for host finish
+    uint64_t flag_from_host;
+    do {
+      flag_from_host = __host_flag[HPU_ID(args)];
+    } while (FLAG_DMA_ID(flag_from_host) != dma_idx[HPU_ID(args)]);
+
+    uint16_t host_pkt_len = FLAG_LEN(flag_from_host);
+
+    // DMA packet data back
+    spin_dma_from_host(pld_haddr, (uint32_t)nic_pld_addr, host_pkt_len, 1,
+                       &dma);
+    do {
+      spin_cmd_test(dma, &completed);
+    } while (!completed);
+
+    printf("DMA roundtrip finished, packet from host size: %d\n", host_pkt_len);
+    if (FLAG_HPU_ID(flag_from_host) != HPU_ID(args)) {
+      printf("HPU ID mismatch in response flag!  Got: %lld\n",
+             FLAG_HPU_ID(flag_from_host));
+    }
+  }
 
   spin_cmd_t put;
   spin_send_packet(nic_pld_addr, pkt_pld_len, &put);
