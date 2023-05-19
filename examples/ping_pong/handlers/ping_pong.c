@@ -35,6 +35,8 @@
 #define FLAG_HPU_ID(fl) ((fl) >> 24 & 0xff)
 #define MKFLAG(id, len, hpuid)                                                 \
   (((id)&0xf) | (((len)&0xff) << 8) | (((hpuid)&0xff) << 24))
+#define DMA_BUS_WIDTH 512
+#define DMA_ALIGN (DMA_BUS_WIDTH / 8)
 
 extern volatile uint64_t __host_flag[NUM_HPUS];
 static uint8_t dma_idx[NUM_HPUS];
@@ -73,47 +75,42 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
   task_t *task = args->task;
 
-  eth_hdr_t *eth_hdr = (eth_hdr_t *)(task->pkt_mem);
-
-  ip_hdr_t *ip_hdr = (ip_hdr_t *)((uint8_t *)eth_hdr + sizeof(eth_hdr_t));
+  pkt_hdr_t *hdrs = (pkt_hdr_t *)(task->pkt_mem);
+  uint16_t pkt_len = args->task->pkt_mem_size;
 #ifdef FROM_L2
   uint8_t *nic_pld_addr = ((uint8_t *)(task->l2_pkt_mem));
 #else
   uint8_t *nic_pld_addr = ((uint8_t *)(task->pkt_mem));
 #endif
 
-  udp_hdr_t *udp_hdr = (udp_hdr_t *)((uint8_t *)ip_hdr + ip_hdr->ihl * 4);
+  mac_addr_t src_mac = hdrs->eth_hdr.src;
+  hdrs->eth_hdr.src = hdrs->eth_hdr.dest;
+  hdrs->eth_hdr.dest = src_mac;
 
-  uint16_t pkt_pld_len = args->task->pkt_mem_size;
+  uint32_t src_id = hdrs->ip_hdr.source_id;
+  hdrs->ip_hdr.source_id = hdrs->ip_hdr.dest_id;
+  hdrs->ip_hdr.dest_id = src_id;
 
-  mac_addr_t src_mac = eth_hdr->src;
-  eth_hdr->src = eth_hdr->dest;
-  eth_hdr->dest = src_mac;
-
-  uint32_t src_id = ip_hdr->source_id;
-  ip_hdr->source_id = ip_hdr->dest_id;
-  ip_hdr->dest_id = src_id;
-
-  uint16_t src_port = udp_hdr->src_port;
-  udp_hdr->src_port = udp_hdr->dst_port;
-  udp_hdr->dst_port = src_port;
+  uint16_t src_port = hdrs->udp_hdr.src_port;
+  hdrs->udp_hdr.src_port = hdrs->udp_hdr.dst_port;
+  hdrs->udp_hdr.dst_port = src_port;
 
   spin_cmd_t dma;
   uint64_t flag_haddr = HOST_ADDR_HPU(args),
-           pld_haddr = HOST_ADDR_HPU(args) + sizeof(uint64_t);
+           pld_haddr = HOST_ADDR_HPU(args) + DMA_ALIGN;
 
   if (HOST_ADDR(args) && args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
     printf("Host flag addr: %#llx\n", flag_haddr);
 
     // DMA packet data
-    spin_dma_to_host(pld_haddr, (uint32_t)nic_pld_addr, pkt_pld_len, 1, &dma);
+    spin_dma_to_host(pld_haddr, (uint32_t)nic_pld_addr, pkt_len, 1, &dma);
     spin_cmd_wait(dma);
     printf("Written packet data\n");
 
     // prepare host notification
     ++dma_idx[HPU_ID(args)];
     uint64_t flag_to_host =
-        MKFLAG(dma_idx[HPU_ID(args)], pkt_pld_len, HPU_ID(args));
+        MKFLAG(dma_idx[HPU_ID(args)], pkt_len, HPU_ID(args));
 
     // write flag
     spin_write_to_host(flag_haddr, flag_to_host, &dma);
@@ -139,10 +136,11 @@ __handler__ void pingpong_ph(handler_args_t *args) {
       printf("HPU ID mismatch in response flag!  Got: %lld\n",
              FLAG_HPU_ID(flag_from_host));
     }
+    pkt_len = host_pkt_len;
   }
 
   spin_cmd_t put;
-  spin_send_packet(nic_pld_addr, pkt_pld_len, &put);
+  spin_send_packet(nic_pld_addr, pkt_len, &put);
   spin_cmd_wait(put);
 }
 

@@ -63,7 +63,8 @@ typedef struct app_hdr
 } __attribute__((__packed__)) app_hdr_t;
 */
 typedef struct pkt_hdr {
-  ip_hdr_t ip_hdr;
+  eth_hdr_t eth_hdr;
+  ip_hdr_t ip_hdr; // FIXME: assumes ihl=4
   udp_hdr_t udp_hdr;
   // app_hdr_t app_hdr;
 } __attribute__((__packed__)) pkt_hdr_t;
