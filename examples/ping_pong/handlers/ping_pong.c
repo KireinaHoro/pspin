@@ -21,6 +21,8 @@
 #define FROM_L1
 #endif
 
+#define DO_HOST_PING true
+
 #define NUM_HPUS_PER_CLUSTER 8
 #define NUM_CLUSTERS 2
 #define NUM_HPUS (NUM_HPUS_PER_CLUSTER * NUM_CLUSTERS)
@@ -61,13 +63,6 @@ static inline void lock(handler_args_t *args) {
 
 static inline void unlock() { amo_store(&lock_owner, 0); }
 
-__handler__ void pingpong_hh(handler_args_t *args) {
-  if (!HPU_ID(args)) {
-    printf("Ping pong head handler\n");
-    amo_store(&lock_owner, 0);
-  }
-}
-
 __handler__ void pingpong_ph(handler_args_t *args) {
   printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d\n",
          args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
@@ -99,7 +94,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   uint64_t flag_haddr = HOST_ADDR_HPU(args),
            pld_haddr = HOST_ADDR_HPU(args) + DMA_ALIGN;
 
-  if (HOST_ADDR(args) && args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
+  if (DO_HOST_PING && HOST_ADDR(args) && args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
     printf("Host flag addr: %#llx\n", flag_haddr);
 
     // DMA packet data
@@ -122,7 +117,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     uint64_t flag_from_host;
     do {
       flag_from_host = __host_flag[HPU_ID(args)];
-    } while (FLAG_DMA_ID(flag_from_host) != dma_idx[HPU_ID(args)]);
+    } while (FLAG_DMA_ID(flag_from_host) != FLAG_DMA_ID(flag_from_host));
 
     uint16_t host_pkt_len = FLAG_LEN(flag_from_host);
 
