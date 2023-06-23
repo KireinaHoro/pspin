@@ -117,7 +117,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     uint64_t flag_from_host;
     do {
       flag_from_host = __host_flag[HPU_ID(args)];
-    } while (FLAG_DMA_ID(flag_from_host) != FLAG_DMA_ID(flag_from_host));
+    } while (FLAG_DMA_ID(flag_to_host) != FLAG_DMA_ID(flag_from_host));
 
     uint16_t host_pkt_len = FLAG_LEN(flag_from_host);
 
