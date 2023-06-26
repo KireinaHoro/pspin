@@ -21,7 +21,8 @@
 #define FROM_L1
 #endif
 
-#define DO_HOST_PING true
+#define DO_HOST_PING false
+// #define printf(...)
 
 #define NUM_HPUS_PER_CLUSTER 8
 #define NUM_CLUSTERS 2
@@ -44,6 +45,8 @@ extern volatile uint64_t __host_flag[NUM_HPUS];
 static uint8_t dma_idx[NUM_HPUS];
 static volatile uint32_t lock_owner;
 
+static volatile int32_t inflight_messages = 0;
+
 // stock spinlock stuck at lock ??
 static inline void lock(handler_args_t *args) {
   int res;
@@ -63,10 +66,27 @@ static inline void lock(handler_args_t *args) {
 
 static inline void unlock() { amo_store(&lock_owner, 0); }
 
-__handler__ void pingpong_ph(handler_args_t *args) {
-  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d\n",
+__handler__ void pingpong_hh(handler_args_t *args) {
+  printf("Start of message: @ %p (L2: %p) (size %d) (lock owner: %d) flow_id "
+         "%d inflight msgs %d\n",
          args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-         lock_owner, args->task->flow_id);
+         lock_owner, args->task->flow_id, inflight_messages);
+  amo_add(&inflight_messages, 1);
+}
+
+__handler__ void pingpong_th(handler_args_t *args) {
+  printf("End of message: @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d "
+         "inflight msgs %d\n",
+         args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
+         lock_owner, args->task->flow_id, inflight_messages);
+  amo_add(&inflight_messages, -1);
+}
+
+__handler__ void pingpong_ph(handler_args_t *args) {
+  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d inflight "
+         "msgs %d\n",
+         args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
+         lock_owner, args->task->flow_id, inflight_messages);
 
   task_t *task = args->task;
 
@@ -94,7 +114,8 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   uint64_t flag_haddr = HOST_ADDR_HPU(args),
            pld_haddr = HOST_ADDR_HPU(args) + DMA_ALIGN;
 
-  if (DO_HOST_PING && HOST_ADDR(args) && args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
+  if (DO_HOST_PING && HOST_ADDR(args) &&
+      args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
     printf("Host flag addr: %#llx\n", flag_haddr);
 
     // DMA packet data
@@ -141,7 +162,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
                    void **handler_mem_ptr) {
-  volatile handler_fn handlers[] = {NULL, pingpong_ph, NULL};
+  volatile handler_fn handlers[] = {pingpong_hh, pingpong_ph, pingpong_th};
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];
