@@ -39,13 +39,20 @@ void hpu_run() {
       handler_args.cluster_id * NB_CORES + handler_args.hpu_id;
   handler_args.task = (task_t *)HWSCHED_HANDLER_MEM_ADDR;
 
+  uint32_t start, end;
+
   while (1) {
 
     handler_fn handler_fun = (handler_fn)MMIO_READ(HWSCHED_HANDLER_FUN_ADDR);
 
     asm volatile("nop"); /* TELEMETRY: HANDLER:START */
+    ecall_0(PSPIN_ECALL_CYCLES, start);
     handler_fun(&handler_args);
+    ecall_0(PSPIN_ECALL_CYCLES, end);
     asm volatile("nop"); /* TELEMETRY: HANDLER:END */
+
+    // FIXME: store at a location where the host can access
+    printf("Handler time (cycles): %u\n", end - start);
 
     MMIO_READ(HWSCHED_DOORBELL);
   }
@@ -77,6 +84,16 @@ void hpu_entry() {
     init_handlers(&hh, &ph, &th, &handler_mem);
   }
 
+  // clear & enable counters
+  uint32_t reset_val = 0;
+  write_csr(mcycle, reset_val);
+  write_csr(minstret, reset_val);
+
+  uint32_t counter_mask;
+  read_csr(PULP_CSR_MCOUNTINHIBIT, counter_mask);
+  counter_mask &= ~0b101; // MCYCLE & MINSTRET
+  write_csr(PULP_CSR_MCOUNTINHIBIT, counter_mask);
+
   clear_csr(PULP_CSR_MSTATUS, MSTATUS_USER);
   write_csr(PULP_CSR_MEPC, hpu_run);
 
@@ -93,15 +110,67 @@ void hpu_entry() {
   asm volatile("mret");
 }
 
+#define handler_error(msg) printf("TRAP @ %#x: " msg "\n", mepc)
+
+typedef struct {
+  uint32_t ra;
+  uint32_t a0, a1, a2, a3, a4, a5, a6, a7;
+  uint32_t t0, t1, t2, t3, t4, t5, t6;
+} __attribute__((packed)) saved_regs_t;
+
+void dump_regs(volatile saved_regs_t *a) {
+  printf("ra=%#x\n", a->ra);
+  printf("a0=%#x\n", a->a0);
+  printf("a1=%#x\n", a->a1);
+  printf("a2=%#x\n", a->a2);
+  printf("a3=%#x\n", a->a3);
+  printf("a4=%#x\n", a->a4);
+  printf("a5=%#x\n", a->a5);
+  printf("a6=%#x\n", a->a6);
+  printf("a7=%#x\n", a->a7);
+  printf("t0=%#x\n", a->t0);
+  printf("t1=%#x\n", a->t1);
+  printf("t2=%#x\n", a->t2);
+  printf("t3=%#x\n", a->t3);
+  printf("t4=%#x\n", a->t4);
+  printf("t5=%#x\n", a->t5);
+  printf("t6=%#x\n", a->t6);
+}
+
 void int0_handler() {
-  uint32_t mcause;
+  uint32_t mcause, mepc;
   read_csr(PULP_CSR_MCAUSE, mcause);
-  /*
+  read_csr(PULP_CSR_MEPC, mepc);
+  
   switch (mcause)
   {
-  case 8: // ECALL
-      handler_error("ecalls are not suppoerted");
+  case 8: {// ECALL
+      // get saved area
+      uint32_t saved;
+      read_csr(mscratch, saved);
+      volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
+      bool handled = false;
+
+      printf("Ecall: %d @ %#x\n", saved_regs->a7, mepc);
+      // dump_regs(saved_regs);
+      switch (saved_regs->a7) {
+        case PSPIN_ECALL_CYCLES:
+          read_csr(mcycle, saved_regs->a0);
+          handled = true;
+          break;
+        default:
+          handler_error("Unknown ecall number");
+      }
+      if (handled) {
+        uint32_t resume = mepc + 4;
+        printf("Returning to %#x\n", resume);
+        // dump_regs(saved_regs);
+        clear_csr(PULP_CSR_MSTATUS, MSTATUS_USER);
+        write_csr(PULP_CSR_MEPC, resume);
+        return;
+      }
       break;
+  }
   case 1:
       handler_error("Instruction access fault");
       break;
@@ -118,7 +187,6 @@ void int0_handler() {
       handler_error("Unrecognized mcause");
       break;
   }
-  */
 
   MMIO_WRITE(HWSCHED_ERROR, mcause);
   MMIO_READ(HWSCHED_DOORBELL);
@@ -131,11 +199,54 @@ void int0_handler() {
   clear_csr(PULP_CSR_MSTATUS, MSTATUS_USER);
   write_csr(PULP_CSR_MEPC, hpu_run);
 
-  // trap to user mode
+  // trap to user mode -- not restoring context
   asm volatile("mret");
 }
 
 void __attribute__((aligned(256))) mtvec() {
   /* ecall */
-  asm volatile("jalr x0, %0, 0" : : "r"(int0_handler));
+  // FIXME: we should have a separate exception stack
+  asm volatile("addi sp, sp, -64"); // save 16 registers
+  asm volatile("sw ra, 0(sp)");
+  asm volatile("sw a0, 4(sp)");
+  asm volatile("sw a1, 8(sp)");
+  asm volatile("sw a2, 12(sp)");
+  asm volatile("sw a3, 16(sp)");
+  asm volatile("sw a4, 20(sp)");
+  asm volatile("sw a5, 24(sp)");
+  asm volatile("sw a6, 28(sp)");
+  asm volatile("sw a7, 32(sp)");
+  asm volatile("sw t0, 36(sp)");
+  asm volatile("sw t1, 40(sp)");
+  asm volatile("sw t2, 44(sp)");
+  asm volatile("sw t3, 48(sp)");
+  asm volatile("sw t4, 52(sp)");
+  asm volatile("sw t5, 56(sp)");
+  asm volatile("sw t6, 60(sp)");
+  
+  // allow access to save area
+  asm volatile("csrw mscratch, sp");
+
+  int0_handler();
+
+  asm volatile("lw ra, 0(sp)");
+  asm volatile("lw a0, 4(sp)");
+  asm volatile("lw a1, 8(sp)");
+  asm volatile("lw a2, 12(sp)");
+  asm volatile("lw a3, 16(sp)");
+  asm volatile("lw a4, 20(sp)");
+  asm volatile("lw a5, 24(sp)");
+  asm volatile("lw a6, 28(sp)");
+  asm volatile("lw a7, 32(sp)");
+  asm volatile("lw t0, 36(sp)");
+  asm volatile("lw t1, 40(sp)");
+  asm volatile("lw t2, 44(sp)");
+  asm volatile("lw t3, 48(sp)");
+  asm volatile("lw t4, 52(sp)");
+  asm volatile("lw t5, 56(sp)");
+  asm volatile("lw t6, 60(sp)");
+  asm volatile("addi sp, sp, 64");
+
+  // trap to user mode
+  asm volatile("mret");
 }

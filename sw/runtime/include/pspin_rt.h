@@ -1,11 +1,11 @@
 // Copyright 2020 ETH Zurich
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,26 +14,27 @@
 
 #pragma once
 
-#include <hal/pulp.h>
 #include <assert.h>
+#include <hal/pulp.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#define ECALL_PSPIN_HANDLER_EXIT 0xa
+#define PAGE_SIZE 4096
 
 #if RISCV_VERSION >= 4 && !defined(RISCV_1_7)
 #if PULP_CHIP_FAMILY == CHIP_GAP
-  #define PULP_CSR_MHARTID 0x014
+#define PULP_CSR_MHARTID 0x014
 #else
-  #define PULP_CSR_MHARTID 0xf14
+#define PULP_CSR_MHARTID 0xf14
 #endif
 #else
-  #define PULP_CSR_MHARTID 0xf10
+#define PULP_CSR_MHARTID 0xf10
 #endif
 
 #define PULP_CSR_MSTATUS 0x300
 #define PULP_CSR_MTVEC 0x305
+#define PULP_CSR_MCOUNTINHIBIT 0x320
 #define PULP_CSR_MEPC 0x341
 #define PULP_CSR_MCAUSE 0x342
 #define PULP_CSR_PRIVLV 0xc10
@@ -59,14 +60,20 @@
 #define PULP_CSR_PMPADDR14 0x3be
 #define PULP_CSR_PMPADDR15 0x3bf
 
-#ifndef NO_PULP
-static inline uint32_t rt_core_id()
-{
-    return hal_core_id();
-}
+// ecalls
+#define PSPIN_ECALL_CYCLES 0x1
+#define ecall(num, a0, a1, a2, a3, a4, a5, a6, ret)                            \
+  asm volatile("mv a0,%1; mv a1,%2; mv a2,%3; mv a3,%4; mv a4,%5; mv a5,%6; "  \
+               "mv a6,%7; mv a7,%8; ecall; mv %0, a0"                          \
+               : "=r"(ret)                                                     \
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5),         \
+                 "r"(a6), "r"(num)                                             \
+               : "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7");
+#define ecall_1(num, a0, ret) ecall(num, a0, 0, 0, 0, 0, 0, 0, ret)
+#define ecall_0(num, ret) ecall_1(num, 0, ret)
 
-static inline uint32_t rt_cluster_id()
-{
-    return hal_cluster_id();
-}
+#ifndef NO_PULP
+static inline uint32_t rt_core_id() { return hal_core_id(); }
+
+static inline uint32_t rt_cluster_id() { return hal_cluster_id(); }
 #endif
