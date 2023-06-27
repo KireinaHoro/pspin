@@ -156,51 +156,50 @@ void int0_handler() {
   uint32_t mcause, mepc;
   read_csr(PULP_CSR_MCAUSE, mcause);
   read_csr(PULP_CSR_MEPC, mepc);
-  
-  switch (mcause)
-  {
-  case 8: {// ECALL
-      // get saved area
-      uint32_t saved;
-      read_csr(mscratch, saved);
-      volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
-      bool handled = false;
 
-      printf("Ecall: %d @ %#x\n", saved_regs->a7, mepc);
-      // dump_regs(saved_regs);
-      switch (saved_regs->a7) {
-        case PSPIN_ECALL_CYCLES:
-          read_csr(mcycle, saved_regs->a0);
-          handled = true;
-          break;
-        default:
-          handler_error("Unknown ecall number");
-      }
-      if (handled) {
-        uint32_t resume = mepc + 4;
-        printf("Returning to %#x\n", resume);
-        // dump_regs(saved_regs);
-        clear_csr(PULP_CSR_MSTATUS, MSTATUS_USER);
-        write_csr(PULP_CSR_MEPC, resume);
-        return;
-      }
+  switch (mcause) {
+  case 8: { // ECALL
+    // get saved area
+    uint32_t saved;
+    read_csr(mscratch, saved);
+    volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
+    bool handled = false;
+
+    printf("Ecall: %d @ %#x\n", saved_regs->a7, mepc);
+    // dump_regs(saved_regs);
+    switch (saved_regs->a7) {
+    case PSPIN_ECALL_CYCLES:
+      read_csr(mcycle, saved_regs->a0);
+      handled = true;
       break;
+    default:
+      handler_error("Unknown ecall number");
+    }
+    if (handled) {
+      uint32_t resume = mepc + 4;
+      printf("Returning to %#x\n", resume);
+      // dump_regs(saved_regs);
+      clear_csr(PULP_CSR_MSTATUS, MSTATUS_USER);
+      write_csr(PULP_CSR_MEPC, resume);
+      return;
+    }
+    break;
   }
   case 1:
-      handler_error("Instruction access fault");
-      break;
+    handler_error("Instruction access fault");
+    break;
   case 2:
-      handler_error("Illegal instruction");
-      break;
+    handler_error("Illegal instruction");
+    break;
   case 5:
-      handler_error("Load access fault");
-      break;
+    handler_error("Load access fault");
+    break;
   case 7:
-      handler_error("Store/AMO access fault");
-      break;
+    handler_error("Store/AMO access fault");
+    break;
   default:
-      handler_error("Unrecognized mcause");
-      break;
+    handler_error("Unrecognized mcause");
+    break;
   }
 
   MMIO_WRITE(HWSCHED_ERROR, mcause);
