@@ -20,7 +20,7 @@
 
 #define MSTATUS_USER (3 << 11)
 
-void __attribute__((aligned(256))) mtvec();
+extern void rt_vec();
 
 typedef struct hpu_descr {
   uint8_t *runtime_sp;
@@ -47,6 +47,7 @@ void hpu_run() {
 
     asm volatile("nop"); /* TELEMETRY: HANDLER:START */
     ecall_0(PSPIN_ECALL_CYCLES, start);
+    printf("Return from ecall: start=%d\n", start);
     handler_fun(&handler_args);
     ecall_0(PSPIN_ECALL_CYCLES, end);
     asm volatile("nop"); /* TELEMETRY: HANDLER:END */
@@ -97,7 +98,7 @@ void hpu_entry() {
   clear_csr(PULP_CSR_MSTATUS, MSTATUS_USER);
   write_csr(PULP_CSR_MEPC, hpu_run);
 
-  write_csr(PULP_CSR_MTVEC, mtvec);
+  write_csr(PULP_CSR_MTVEC, rt_vec);
 
   // we save these now because can't access them in user mode
   write_register(x10, cluster_id);
@@ -114,8 +115,10 @@ void hpu_entry() {
 
 typedef struct {
   uint32_t ra;
+  // not saving: sp, gp, tp
   uint32_t a0, a1, a2, a3, a4, a5, a6, a7;
   uint32_t t0, t1, t2, t3, t4, t5, t6;
+  uint32_t s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;
 } __attribute__((packed)) saved_regs_t;
 
 void dump_regs(volatile saved_regs_t *a) {
@@ -135,6 +138,18 @@ void dump_regs(volatile saved_regs_t *a) {
   printf("t4=%#x\n", a->t4);
   printf("t5=%#x\n", a->t5);
   printf("t6=%#x\n", a->t6);
+  printf("s0=%#x\n", a->s0);
+  printf("s1=%#x\n", a->s1);
+  printf("s2=%#x\n", a->s2);
+  printf("s3=%#x\n", a->s3);
+  printf("s4=%#x\n", a->s4);
+  printf("s5=%#x\n", a->s5);
+  printf("s6=%#x\n", a->s6);
+  printf("s7=%#x\n", a->s7);
+  printf("s8=%#x\n", a->s8);
+  printf("s9=%#x\n", a->s9);
+  printf("s10=%#x\n", a->s10);
+  printf("s11=%#x\n", a->s11);
 }
 
 void int0_handler() {
@@ -200,53 +215,5 @@ void int0_handler() {
   write_csr(PULP_CSR_MEPC, hpu_run);
 
   // trap to user mode -- not restoring context
-  asm volatile("mret");
-}
-
-void __attribute__((aligned(256))) mtvec() {
-  /* ecall */
-  // FIXME: we should have a separate exception stack
-  asm volatile("addi sp, sp, -64"); // save 16 registers
-  asm volatile("sw ra, 0(sp)");
-  asm volatile("sw a0, 4(sp)");
-  asm volatile("sw a1, 8(sp)");
-  asm volatile("sw a2, 12(sp)");
-  asm volatile("sw a3, 16(sp)");
-  asm volatile("sw a4, 20(sp)");
-  asm volatile("sw a5, 24(sp)");
-  asm volatile("sw a6, 28(sp)");
-  asm volatile("sw a7, 32(sp)");
-  asm volatile("sw t0, 36(sp)");
-  asm volatile("sw t1, 40(sp)");
-  asm volatile("sw t2, 44(sp)");
-  asm volatile("sw t3, 48(sp)");
-  asm volatile("sw t4, 52(sp)");
-  asm volatile("sw t5, 56(sp)");
-  asm volatile("sw t6, 60(sp)");
-  
-  // allow access to save area
-  asm volatile("csrw mscratch, sp");
-
-  int0_handler();
-
-  asm volatile("lw ra, 0(sp)");
-  asm volatile("lw a0, 4(sp)");
-  asm volatile("lw a1, 8(sp)");
-  asm volatile("lw a2, 12(sp)");
-  asm volatile("lw a3, 16(sp)");
-  asm volatile("lw a4, 20(sp)");
-  asm volatile("lw a5, 24(sp)");
-  asm volatile("lw a6, 28(sp)");
-  asm volatile("lw a7, 32(sp)");
-  asm volatile("lw t0, 36(sp)");
-  asm volatile("lw t1, 40(sp)");
-  asm volatile("lw t2, 44(sp)");
-  asm volatile("lw t3, 48(sp)");
-  asm volatile("lw t4, 52(sp)");
-  asm volatile("lw t5, 56(sp)");
-  asm volatile("lw t6, 60(sp)");
-  asm volatile("addi sp, sp, 64");
-
-  // trap to user mode
   asm volatile("mret");
 }

@@ -16,7 +16,7 @@ PULP_SRCS=$(PULP_SDK)/runtime/libs/io/io.c $(PULP_SDK)/runtime/libs/io/tinyprint
 PULP_INC=-I$(PULP_SDK)/runtime/libs/io/
 
 #SRC_FILES=$(PSPIN_RT)/src/hpu.c $(PSPIN_RT)/src/handler.c ${SPIN_APP_SRCS}
-SRC_FILES=$(PSPIN_RT)/runtime/src/hpu.c ${SPIN_APP_SRCS}
+SRC_FILES=$(PSPIN_RT)/runtime/src/hpu.c $(PSPIN_RT)/runtime/src/mtvec.S ${SPIN_APP_SRCS}
 
 runtime-debug:
 	mkdir -p build/
