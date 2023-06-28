@@ -93,8 +93,8 @@ SECTIONS
     . = ALIGN(4);
     sdata  =  .;
     _sdata  =  .;
-    __host_flag = .;
-    . += 128; /* uint64_t __host_flag[16]*/
+    __host_data = .;
+    . += 136; /* 16 * uint64_t + 2 * uint32_t */
     *(.data);
     *(.data.*)
     *(.sdata);

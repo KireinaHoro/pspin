@@ -117,6 +117,7 @@ __handler__ void pingpong_th(handler_args_t *args) {
 }
 
 __handler__ void pingpong_ph(handler_args_t *args) {
+  uint32_t start = cycles();
   DEBUG("Packet @ %p (L2: %p) (size %d) flow_id %d inflight msgs %d\n",
         args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
         args->task->flow_id, inflight_messages);
@@ -165,7 +166,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     // poll for host finish
     uint64_t flag_from_host;
     do {
-      flag_from_host = __host_flag[HPU_ID(args)];
+      flag_from_host = __host_data.flag[HPU_ID(args)];
     } while (FLAG_DMA_ID(flag_to_host) != FLAG_DMA_ID(flag_from_host));
     // FIXME: end
 
@@ -196,6 +197,10 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   spin_cmd_t put;
   spin_send_packet(nic_pld_addr, pkt_len, &put);
   spin_cmd_wait(put);
+
+  uint32_t end = cycles();
+  amo_add(&__host_data.perf_count, 1);
+  amo_add(&__host_data.perf_sum, end - start);
 }
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
@@ -204,4 +209,7 @@ void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];
+
+  __host_data.perf_count = 0;
+  __host_data.perf_sum = 0;
 }

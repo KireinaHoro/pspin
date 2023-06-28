@@ -19,6 +19,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "spin_conf.h"
+
+#include "pspin_rt.h"
 
 #define MEM_ALIGNMENT 4
 #define ALIGN_UP(NUM, ALIGN) ((((uint32_t)(NUM)) + ((ALIGN)-1)) & ~((ALIGN)-1))
@@ -27,6 +30,14 @@
 
 typedef uint32_t dma_t;
 typedef volatile uint32_t futex_t;
+
+// definition in link.ld
+struct host_data {
+  uint64_t flag[CORE_COUNT];
+  uint32_t perf_count;
+  uint32_t perf_sum;
+};
+extern volatile struct host_data __host_data;
 
 #ifndef NO_PULP
 
@@ -267,6 +278,12 @@ static inline int futex_lock_s(futex_t *futex)
 static inline void futex_unlock(futex_t *futex)
 {
     futex_init(futex);
+}
+
+static inline uint32_t cycles() {
+  uint32_t c;
+  ecall_0(PSPIN_ECALL_CYCLES, c);
+  return c;
 }
 
 #endif

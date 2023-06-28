@@ -135,6 +135,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // get telemetry
+  uint32_t avg_cycles = fpspin_get_avg_cycles(&ctx);
+  printf("Handler cycles average: %d\n", avg_cycles);
+
   fpspin_exit(&ctx);
   return EXIT_SUCCESS;
 

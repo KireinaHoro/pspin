@@ -39,21 +39,13 @@ void hpu_run() {
       handler_args.cluster_id * NB_CORES + handler_args.hpu_id;
   handler_args.task = (task_t *)HWSCHED_HANDLER_MEM_ADDR;
 
-  uint32_t start, end;
-
   while (1) {
 
     handler_fn handler_fun = (handler_fn)MMIO_READ(HWSCHED_HANDLER_FUN_ADDR);
 
     asm volatile("nop"); /* TELEMETRY: HANDLER:START */
-    ecall_0(PSPIN_ECALL_CYCLES, start);
-    printf("Return from ecall: start=%d\n", start);
     handler_fun(&handler_args);
-    ecall_0(PSPIN_ECALL_CYCLES, end);
     asm volatile("nop"); /* TELEMETRY: HANDLER:END */
-
-    // FIXME: store at a location where the host can access
-    printf("Handler time (cycles): %u\n", end - start);
 
     MMIO_READ(HWSCHED_DOORBELL);
   }
@@ -165,7 +157,7 @@ void int0_handler() {
     volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
     bool handled = false;
 
-    printf("Ecall: %d @ %#x\n", saved_regs->a7, mepc);
+    // printf("Ecall: %d @ %#x\n", saved_regs->a7, mepc);
     // dump_regs(saved_regs);
     switch (saved_regs->a7) {
     case PSPIN_ECALL_CYCLES:
@@ -177,7 +169,7 @@ void int0_handler() {
     }
     if (handled) {
       uint32_t resume = mepc + 4;
-      printf("Returning to %#x\n", resume);
+      // printf("Returning to %#x\n", resume);
       // dump_regs(saved_regs);
       clear_csr(PULP_CSR_MSTATUS, MSTATUS_USER);
       write_csr(PULP_CSR_MEPC, resume);
