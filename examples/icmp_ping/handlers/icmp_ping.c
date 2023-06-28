@@ -189,8 +189,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     uint16_t icmp_len = ip_len - sizeof(ip_hdr_t);
     hdrs->icmp_hdr.type = 0; // Echo-Reply
     hdrs->icmp_hdr.checksum = 0;
-    hdrs->icmp_hdr.checksum =
-        ip_checksum((uint8_t *)&hdrs->icmp_hdr, icmp_len);
+    hdrs->icmp_hdr.checksum = ip_checksum((uint8_t *)&hdrs->icmp_hdr, icmp_len);
     pkt_len = ip_len + sizeof(eth_hdr_t);
   }
 
