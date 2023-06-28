@@ -31,8 +31,6 @@
 #define DEBUG(...) printf(__VA_ARGS__)
 // #define DEBUG(...)
 
-// TODO: refactor into common facility
-static volatile int32_t inflight_messages = 0;
 
 static inline uint16_t bswap_16(uint16_t v) {
   return ((v & 0xff) << 8) | (v >> 8);
@@ -86,26 +84,10 @@ uint16_t ip_checksum(void *vdata, size_t length) {
   return htons(~acc);
 }
 
-__handler__ void pingpong_hh(handler_args_t *args) {
-  DEBUG(
-      "Start of message: @ %p (L2: %p) (size %d) flow_id %d inflight msgs %d\n",
-      args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-      args->task->flow_id, inflight_messages);
-  amo_add(&inflight_messages, 1);
-}
-
-__handler__ void pingpong_th(handler_args_t *args) {
-  DEBUG("End of message: @ %p (L2: %p) (size %d) flow_id %d inflight msgs %d\n",
-        args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-        args->task->flow_id, inflight_messages);
-  amo_add(&inflight_messages, -1);
-}
-
 __handler__ void pingpong_ph(handler_args_t *args) {
   uint32_t start = cycles();
-  DEBUG("Packet @ %p (L2: %p) (size %d) flow_id %d inflight msgs %d\n",
-        args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-        args->task->flow_id, inflight_messages);
+  DEBUG("Packet @ %p (L2: %p) (size %d) flow_id %d\n", args->task->pkt_mem,
+        args->task->l2_pkt_mem, args->task->pkt_mem_size, args->task->flow_id);
 
   task_t *task = args->task;
 
@@ -168,7 +150,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
                    void **handler_mem_ptr) {
-  volatile handler_fn handlers[] = {pingpong_hh, pingpong_ph, pingpong_th};
+  volatile handler_fn handlers[] = {NULL, pingpong_ph, NULL};
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];
