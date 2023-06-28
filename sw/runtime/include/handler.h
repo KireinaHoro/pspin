@@ -49,8 +49,9 @@ typedef struct task
     size_t pkt_mem_size;
     
     //per-message scratchpad (L1)
-    void* scratchpad[NB_CLUSTERS];
-    size_t scratchpad_size[NB_CLUSTERS];
+    // FIXME: this should match with the hpu_driver layout
+    void* scratchpad[4];
+    size_t scratchpad_size[4];
 
     //host memory region
     uint32_t host_mem_high;

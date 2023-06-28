@@ -30,11 +30,8 @@
 #define DEBUG(...) printf(__VA_ARGS__)
 // #define DEBUG(...)
 
-#define NUM_HPUS_PER_CLUSTER 8
-#define NUM_CLUSTERS 2
-#define NUM_HPUS (NUM_HPUS_PER_CLUSTER * NUM_CLUSTERS)
 #define PAGE_SIZE 4096
-#define HPU_ID(args) (args->cluster_id * NUM_HPUS_PER_CLUSTER + args->hpu_id)
+#define HPU_ID(args) (args->cluster_id * NB_CORES + args->hpu_id)
 #define HOST_ADDR(args)                                                        \
   (((uint64_t)args->task->host_mem_high << 32) | args->task->host_mem_low)
 #define HOST_ADDR_HPU(args) (HOST_ADDR(args) + HPU_ID(args) * PAGE_SIZE)
@@ -48,8 +45,7 @@
 #define DMA_ALIGN (DMA_BUS_WIDTH / 8)
 
 // TODO: refactor into common facility
-extern volatile uint64_t __host_flag[NUM_HPUS];
-static uint8_t dma_idx[NUM_HPUS];
+static uint8_t dma_idx[CORE_COUNT];
 
 static volatile int32_t inflight_messages = 0;
 
@@ -148,7 +144,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   uint64_t flag_haddr = HOST_ADDR_HPU(args),
            pld_haddr = HOST_ADDR_HPU(args) + DMA_ALIGN;
 
-  if (DO_HOST && HOST_ADDR(args) && args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
+  if (DO_HOST && HOST_ADDR(args) && args->task->host_mem_size >= CORE_COUNT * PAGE_SIZE) {
     DEBUG("Host flag addr: %#llx\n", flag_haddr);
 
     // DMA packet data

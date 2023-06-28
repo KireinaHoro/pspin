@@ -24,7 +24,7 @@
 // FIXME: we need to change hpu_driver.sv together with this
 // we only have 2 clusters atm but keeping it as 4
 #ifndef NB_CLUSTERS
-#define NB_CLUSTERS 4
+#define NB_CLUSTERS 2
 #endif
 #define CORE_COUNT (NB_CORES * NB_CLUSTERS)
 
