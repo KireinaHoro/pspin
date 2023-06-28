@@ -16,6 +16,7 @@
 #include <handler.h>
 #include <packets.h>
 #include <spin_dma.h>
+#include <spin_host.h>
 
 #if !defined(FROM_L2) && !defined(FROM_L1)
 #define FROM_L1
@@ -24,25 +25,6 @@
 #define DO_HOST_PING false
 // #define printf(...)
 
-#define NUM_HPUS_PER_CLUSTER 8
-#define NUM_CLUSTERS 2
-#define NUM_HPUS (NUM_HPUS_PER_CLUSTER * NUM_CLUSTERS)
-#define PAGE_SIZE 4096
-#define HPU_ID(args) (args->cluster_id * NUM_HPUS_PER_CLUSTER + args->hpu_id)
-#define HOST_ADDR(args)                                                        \
-  (((uint64_t)args->task->host_mem_high << 32) | args->task->host_mem_low)
-#define HOST_ADDR_HPU(args) (HOST_ADDR(args) + HPU_ID(args) * PAGE_SIZE)
-
-#define FLAG_DMA_ID(fl) ((fl)&0xf)
-#define FLAG_LEN(fl) (((fl) >> 8) & 0xff)
-#define FLAG_HPU_ID(fl) ((fl) >> 24 & 0xff)
-#define MKFLAG(id, len, hpuid)                                                 \
-  (((id)&0xf) | (((len)&0xff) << 8) | (((hpuid)&0xff) << 24))
-#define DMA_BUS_WIDTH 512
-#define DMA_ALIGN (DMA_BUS_WIDTH / 8)
-
-extern volatile uint64_t __host_flag[NUM_HPUS];
-static uint8_t dma_idx[NUM_HPUS];
 static volatile uint32_t lock_owner;
 
 static volatile int32_t inflight_messages = 0;
@@ -111,47 +93,24 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   hdrs->udp_hdr.dst_port = src_port;
 
   spin_cmd_t dma;
-  uint64_t flag_haddr = HOST_ADDR_HPU(args),
-           pld_haddr = HOST_ADDR_HPU(args) + DMA_ALIGN;
+  uint64_t flag_from_host;
 
-  if (DO_HOST_PING && HOST_ADDR(args) &&
-      args->task->host_mem_size >= NUM_HPUS * PAGE_SIZE) {
-    printf("Host flag addr: %#llx\n", flag_haddr);
-
+  if (DO_HOST_PING && fpspin_check_host_mem(args)) {
     // DMA packet data
-    spin_dma_to_host(pld_haddr, (uint32_t)nic_pld_addr, pkt_len, 1, &dma);
+    spin_dma_to_host(HOST_PLD_ADDR(args), (uint32_t)nic_pld_addr, pkt_len, 1,
+                     &dma);
     spin_cmd_wait(dma);
     printf("Written packet data\n");
 
-    // prepare host notification
-    ++dma_idx[HPU_ID(args)];
-    uint64_t flag_to_host =
-        MKFLAG(dma_idx[HPU_ID(args)], pkt_len, HPU_ID(args));
-
-    // write flag
-    spin_write_to_host(flag_haddr, flag_to_host, &dma);
-    spin_cmd_wait(dma);
-    printf("Flag %#llx (id %#llx, len %lld) written to host\n", flag_to_host,
-           FLAG_DMA_ID(flag_to_host), FLAG_LEN(flag_to_host));
-
-    // poll for host finish
-    uint64_t flag_from_host;
-    do {
-      flag_from_host = __host_flag[HPU_ID(args)];
-    } while (FLAG_DMA_ID(flag_to_host) != FLAG_DMA_ID(flag_from_host));
-
+    flag_from_host = fpspin_host_req(args, pkt_len);
     uint16_t host_pkt_len = FLAG_LEN(flag_from_host);
 
     // DMA packet data back
-    spin_dma_from_host(pld_haddr, (uint32_t)nic_pld_addr, host_pkt_len, 1,
-                       &dma);
+    spin_dma_from_host(HOST_PLD_ADDR(args), (uint32_t)nic_pld_addr,
+                       host_pkt_len, 1, &dma);
     spin_cmd_wait(dma);
 
     printf("DMA roundtrip finished, packet from host size: %d\n", host_pkt_len);
-    if (FLAG_HPU_ID(flag_from_host) != HPU_ID(args)) {
-      printf("HPU ID mismatch in response flag!  Got: %lld\n",
-             FLAG_HPU_ID(flag_from_host));
-    }
     pkt_len = host_pkt_len;
   }
 
