@@ -2,8 +2,7 @@ CC ?= gcc
 CFLAGS ?= -O3 -g -fsanitize=address -march=native
 LIBS ?= $(shell realpath ../../../../../../../../lib)
 
-HANDLERS_DIR := $(shell pwd)/..
-IMG_PATH := $(HANDLERS_DIR)/build/pingpong
+IMG_PATH := build/pingpong
 
 CFLAGS += -Wall -D__PSPIN_USER__
 CPPFLAGS += -I$(LIBS) -D__IMG__=\"$(IMG_PATH)\"

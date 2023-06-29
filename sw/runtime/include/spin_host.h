@@ -7,10 +7,10 @@
 #define HOST_PLD_ADDR(args) (HOST_ADDR_HPU(args) + DMA_ALIGN)
 
 #define FLAG_DMA_ID(fl) ((fl)&0xf)
-#define FLAG_LEN(fl) (((fl) >> 8) & 0xff)
+#define FLAG_LEN(fl) (((fl) >> 8) & 0xffff)
 #define FLAG_HPU_ID(fl) ((fl) >> 24 & 0xff)
 #define MKFLAG(id, len, hpuid)                                                 \
-  (((id)&0xf) | (((len)&0xff) << 8) | (((hpuid)&0xff) << 24))
+  (((id)&0xf) | (((len)&0xffff) << 8) | (((hpuid)&0xff) << 24))
 #define DMA_BUS_WIDTH 512
 #define DMA_ALIGN (DMA_BUS_WIDTH / 8)
 

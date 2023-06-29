@@ -121,6 +121,13 @@ int main(int argc, char *argv[]) {
         continue;
       volatile hdr_t *hdrs = (hdr_t *)pkt_addr;
       uint16_t ip_len = ntohs(hdrs->ip_hdr.length);
+      uint16_t eth_len = sizeof(eth_hdr_t) + ip_len;
+      uint16_t flag_len = FLAG_LEN(flag_to_host);
+      if (flag_len < eth_len) {
+        printf("Warning: packet truncated; received %d, expected %d (from IP "
+               "header)\n",
+               flag_len, eth_len);
+      }
 
       // ICMP type and checksum
       size_t icmp_len = ip_len - sizeof(ip_hdr_t);
@@ -129,8 +136,7 @@ int main(int argc, char *argv[]) {
       hdrs->icmp_hdr.checksum =
           ip_checksum((uint8_t *)&hdrs->icmp_hdr, icmp_len);
 
-      size_t return_size = ip_len + sizeof(eth_hdr_t);
-      uint64_t flag_from_host = MKFLAG(return_size);
+      uint64_t flag_from_host = MKFLAG(eth_len);
       fpspin_push_resp(&ctx, i, flag_from_host);
     }
   }
