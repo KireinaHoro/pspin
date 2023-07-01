@@ -22,8 +22,9 @@
 #define FROM_L1
 #endif
 
-#define DO_HOST_PING false
-// #define printf(...)
+#define DO_HOST_PING true
+#define DEBUG(...)
+// #define DEBUG(...) printf(__VA_ARGS__)
 
 static volatile uint32_t lock_owner;
 
@@ -48,27 +49,13 @@ static inline void lock(handler_args_t *args) {
 
 static inline void unlock() { amo_store(&lock_owner, 0); }
 
-__handler__ void pingpong_hh(handler_args_t *args) {
-  printf("Start of message: @ %p (L2: %p) (size %d) (lock owner: %d) flow_id "
-         "%d inflight msgs %d\n",
-         args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-         lock_owner, args->task->flow_id, inflight_messages);
-  amo_add(&inflight_messages, 1);
-}
-
-__handler__ void pingpong_th(handler_args_t *args) {
-  printf("End of message: @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d "
-         "inflight msgs %d\n",
-         args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-         lock_owner, args->task->flow_id, inflight_messages);
-  amo_add(&inflight_messages, -1);
-}
-
 __handler__ void pingpong_ph(handler_args_t *args) {
-  printf("Packet @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d inflight "
-         "msgs %d\n",
-         args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
-         lock_owner, args->task->flow_id, inflight_messages);
+  uint32_t start = cycles();
+
+  DEBUG("Packet @ %p (L2: %p) (size %d) (lock owner: %d) flow_id %d inflight "
+        "msgs %d\n",
+        args->task->pkt_mem, args->task->l2_pkt_mem, args->task->pkt_mem_size,
+        lock_owner, args->task->flow_id, inflight_messages);
 
   task_t *task = args->task;
 
@@ -100,7 +87,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     spin_dma_to_host(HOST_PLD_ADDR(args), (uint32_t)nic_pld_addr, pkt_len, 1,
                      &dma);
     spin_cmd_wait(dma);
-    printf("Written packet data\n");
+    DEBUG("Written packet data\n");
 
     flag_from_host = fpspin_host_req(args, pkt_len);
     uint16_t host_pkt_len = FLAG_LEN(flag_from_host);
@@ -110,18 +97,23 @@ __handler__ void pingpong_ph(handler_args_t *args) {
                        host_pkt_len, 1, &dma);
     spin_cmd_wait(dma);
 
-    printf("DMA roundtrip finished, packet from host size: %d\n", host_pkt_len);
+    DEBUG("DMA roundtrip finished, packet from host size: %d\n", host_pkt_len);
     pkt_len = host_pkt_len;
   }
 
   spin_cmd_t put;
   spin_send_packet(nic_pld_addr, pkt_len, &put);
   spin_cmd_wait(put);
+
+  // push performance statistics
+  uint32_t end = cycles();
+  amo_add(&__host_data.perf_count, 1);
+  amo_add(&__host_data.perf_sum, end - start);
 }
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
                    void **handler_mem_ptr) {
-  volatile handler_fn handlers[] = {pingpong_hh, pingpong_ph, pingpong_th};
+  volatile handler_fn handlers[] = {NULL, pingpong_ph, NULL};
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];

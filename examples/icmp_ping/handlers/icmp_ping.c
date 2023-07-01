@@ -26,11 +26,10 @@
 #define FROM_L1
 #endif
 
-#define DO_HOST true
+#define DO_HOST false
 
-#define DEBUG(...) printf(__VA_ARGS__)
-// #define DEBUG(...)
-
+// #define DEBUG(...) printf(__VA_ARGS__)
+#define DEBUG(...)
 
 static inline uint16_t bswap_16(uint16_t v) {
   return ((v & 0xff) << 8) | (v >> 8);
@@ -154,7 +153,4 @@ void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];
-
-  __host_data.perf_count = 0;
-  __host_data.perf_sum = 0;
 }

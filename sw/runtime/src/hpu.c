@@ -76,6 +76,10 @@ void hpu_entry() {
     handler_fn hh, ph, th;
     void *handler_mem;
     init_handlers(&hh, &ph, &th, &handler_mem);
+
+    // initialise performance counters
+    __host_data.perf_count = 0;
+    __host_data.perf_sum = 0;
   }
 
   // clear & enable counters
