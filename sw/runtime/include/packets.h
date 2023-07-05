@@ -15,6 +15,7 @@
 #define PACKETS_H
 
 #include <stdint.h>
+#include <string.h>
 
 typedef struct mac_addr {
   uint8_t data[6];
@@ -54,6 +55,13 @@ typedef struct udp_hdr {
   uint16_t checksum;
 } __attribute__((__packed__)) udp_hdr_t;
 
+// sPIN Lightweight Message Protocol
+typedef struct slmp_hdr {
+  uint16_t flags;
+  uint32_t msg_id;  // larger than needed, but for alignment purposes (Ethernet header is 6 bytes)
+  uint32_t pkt_off; // packet offset in message
+} __attribute__((__packed__)) slmp_hdr_t;
+
 /*
 typedef struct app_hdr
 { //QUIC-like
@@ -66,7 +74,54 @@ typedef struct pkt_hdr {
   eth_hdr_t eth_hdr;
   ip_hdr_t ip_hdr; // FIXME: assumes ihl=4
   udp_hdr_t udp_hdr;
-  // app_hdr_t app_hdr;
 } __attribute__((__packed__)) pkt_hdr_t;
+
+typedef struct slmp_pkt_hdr {
+  eth_hdr_t eth_hdr;
+  ip_hdr_t ip_hdr; // FIXME: assumes ihl=4
+  udp_hdr_t udp_hdr;
+  slmp_hdr_t slmp_hdr;
+} __attribute__((__packed__)) slmp_pkt_hdr_t;
+
+static inline uint16_t bswap_16(uint16_t v) {
+  return ((v & 0xff) << 8) | (v >> 8);
+}
+#define htons(x) bswap_16(x)
+#define ntohs htons
+
+#define SLMP_PAYLOAD_LEN(hdr) (ntohs(hdr->udp_hdr.length) - sizeof(udp_hdr_t) - sizeof(slmp_hdr_t))
+
+// http://www.microhowto.info/howto/calculate_an_internet_protocol_checksum_in_c.html
+static inline uint16_t ip_checksum(void *vdata, size_t length) {
+  // Cast the data pointer to one that can be indexed.
+  char *data = (char *)vdata;
+
+  // Initialise the accumulator.
+  uint32_t acc = 0xffff;
+
+  // Handle complete 16-bit blocks.
+  for (size_t i = 0; i + 1 < length; i += 2) {
+    uint16_t word;
+    memcpy(&word, data + i, 2);
+    acc += ntohs(word);
+    if (acc > 0xffff) {
+      acc -= 0xffff;
+    }
+  }
+
+  // Handle any partial block at the end of the data.
+  if (length & 1) {
+    uint16_t word = 0;
+    memcpy(&word, data + length - 1, 1);
+    acc += ntohs(word);
+    if (acc > 0xffff) {
+      acc -= 0xffff;
+    }
+  }
+
+  // Return the checksum in network byte order.
+  return htons(~acc);
+}
+
 
 #endif /* PACKETS_H */

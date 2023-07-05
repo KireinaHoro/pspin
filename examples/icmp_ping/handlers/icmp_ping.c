@@ -31,13 +31,6 @@
 // #define DEBUG(...) printf(__VA_ARGS__)
 #define DEBUG(...)
 
-static inline uint16_t bswap_16(uint16_t v) {
-  return ((v & 0xff) << 8) | (v >> 8);
-}
-
-#define htons(x) bswap_16(x)
-#define ntohs htons
-
 // FIXME: only for ICMP echo
 typedef struct {
   uint8_t type;

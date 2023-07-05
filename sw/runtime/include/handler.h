@@ -49,9 +49,11 @@ typedef struct task
     size_t pkt_mem_size;
     
     //per-message scratchpad (L1)
-    // FIXME: this should match with the hpu_driver layout
-    void* scratchpad[4];
-    size_t scratchpad_size[4];
+    void* scratchpad[NB_CLUSTERS];
+    // FIXME: remove this padding in hpu_driver
+    uint32_t unused_0[2];
+    size_t scratchpad_size[NB_CLUSTERS];
+    uint32_t unused_1[2];
 
     //host memory region
     uint32_t host_mem_high;
@@ -302,6 +304,5 @@ static inline int spin_write_to_host(uint64_t host_addr, uint64_t user_data, spi
     return SPIN_OK;
 }
 
-//this function is only needed to avoid the compiler stripping away the handler functions (we don't reference them
-//from the code but have pointers to them in the ME)
+// used to implement handler initialisation
 void init_handlers(handler_fn * hh, handler_fn *ph, handler_fn *th, void **handler_mem_ptr);
