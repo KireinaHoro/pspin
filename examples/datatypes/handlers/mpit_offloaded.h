@@ -562,7 +562,7 @@ static inline int ddt_contig(uint32_t myblocks, uint32_t stream_el_size, uint32_
 	//fflush(stdout);
 	uint32_t ctg_size = myblocks * stream_el_size;
 
-	uint64_t dma_source = (uint64_t)paramp->streambuf;
+	uint32_t dma_source = (uint32_t)paramp->streambuf;
 	uint64_t dma_dest = (uint64_t)(paramp->userbuf + curoffset);
 	uint32_t dma_size = ctg_size;
 
@@ -570,7 +570,9 @@ static inline int ddt_contig(uint32_t myblocks, uint32_t stream_el_size, uint32_
     printf("[CONTIG] host_addr: %p\n", paramp->userbuf);
     fflush(stdout);
 */
-	ptl_epu_dma_to_host(dma_source, dma_dest, dma_size, 0);
+	// asynchronous DMA; hardware will ensure all commands are finished by the time the handler finishes
+	spin_cmd_t dma;
+	spin_dma_to_host(dma_dest, dma_source, dma_size, 0, &dma);
 	paramp->streambuf += ctg_size;
 
 	return 0;
@@ -579,18 +581,19 @@ static inline int ddt_contig(uint32_t myblocks, uint32_t stream_el_size, uint32_
 static inline int ddt_vector(uint32_t myblocks, uint32_t block_size, uint32_t stride, uint32_t stream_el_size, uint32_t curroffset, struct MPIT_m2m_params *paramp)
 {
 	DLOOP_Count i, blocks_left, whole_count;
-	char *cbufp;
-	cbufp = paramp->userbuf + curroffset;
+	uint32_t cbufp = paramp->userbuf + curroffset;
 
 	whole_count = (block_size > 0) ? (myblocks / block_size) : 0;
 	blocks_left = (block_size > 0) ? (myblocks % block_size) : 0;
+
+	spin_cmd_t dma;
 
 	for (i = 0; i < whole_count; i++)
 	{
         //printf("ddt_vector: copying (1) from %p to %p (size: %u)\n", cbufp, paramp->streambuf, block_size * stream_el_size);
         //fflush(stdout);
 
-		ptl_epu_dma_to_host((uint64_t)paramp->streambuf, (uint64_t)cbufp, block_size * stream_el_size, 0);
+		spin_dma_to_host(cbufp, (uint32_t)paramp->streambuf, block_size * stream_el_size, 0, &dma);
 		paramp->streambuf += block_size * stream_el_size;
 		cbufp += stride;
 	}
@@ -599,7 +602,7 @@ static inline int ddt_vector(uint32_t myblocks, uint32_t block_size, uint32_t st
 		//printf("copying (2) from %p to %p (size: %u)\n", cbufp, paramp->streambuf, blocks_left * stream_el_size);
 		//fflush(stdout);
 
-		ptl_epu_dma_to_host((uint64_t)paramp->streambuf, (uint64_t)cbufp, blocks_left * stream_el_size, 0);
+		spin_dma_to_host(cbufp, (uint32_t)paramp->streambuf, blocks_left * stream_el_size, 0, &dma);
 		paramp->streambuf += blocks_left * stream_el_size;
 	}
 	return 0;
@@ -610,11 +613,11 @@ static inline int ddt_block_index(uint32_t myblocks, uint32_t block_idx, uint32_
 	//printf("ddt block index\n");
 	//fflush(stdout);
 	DLOOP_Offset blocks_left = myblocks;
-	char *cbufp;
-	char *dest;
+	uint32_t cbufp = paramp->userbuf + curroffset;
+	uint32_t dest;
 	char const *src;
-	cbufp = paramp->userbuf + curroffset;
 	DLOOP_Offset const *offsetp = &(offsetarray[block_idx]);
+	spin_cmd_t dma;
 
 	int srcsize = stream_el_size * block_size;
 	src = paramp->streambuf;
@@ -633,7 +636,7 @@ static inline int ddt_block_index(uint32_t myblocks, uint32_t block_idx, uint32_
 		}
 
 		dest = cbufp + *offsetp++;
-		ptl_epu_dma_to_host((uint64_t)src, (uint64_t)dest, srcsize, 0);
+		spin_dma_to_host(dest, (uint32_t)src, srcsize, 0, &dma);
 		src += srcsize;
 		blocks_left -= block_size;
 	}
@@ -649,11 +652,13 @@ static inline int ddt_index(uint32_t myblocks, uint32_t block_idx, DLOOP_Count *
 	//fflush(stdout);
 	int curblock = block_idx;
 	DLOOP_Offset cur_block_sz, blocks_left = myblocks;
-	char *cbufp;
+	uint32_t cbufp;
+	spin_cmd_t dma;
 
 	while (blocks_left)
 	{
-		char *src, *dest;
+		char *src;
+		uint32_t dest;
 
 		cur_block_sz = blockarray[curblock];
 
@@ -664,7 +669,7 @@ static inline int ddt_index(uint32_t myblocks, uint32_t block_idx, DLOOP_Count *
 		src = paramp->streambuf;
 		dest = cbufp;
 		
-		ptl_epu_dma_to_host((uint64_t)src, (uint64_t)dest, cur_block_sz * stream_el_size, 0);
+		spin_dma_to_host(dest, (uint32_t)src, cur_block_sz * stream_el_size, 0, &dma);
 
 		paramp->streambuf += cur_block_sz * stream_el_size;
 		blocks_left -= cur_block_sz;
@@ -728,7 +733,7 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 
 	for (;;)
 	{
-        asm("// loop start");
+        // asm("// loop start");
 		if (cur_elmp->loop_p->kind & DLOOP_FINAL_MASK)
 		{
 			DLOOP_Offset myblocks, local_el_size, stream_el_size;
@@ -781,10 +786,12 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 				//printf("Copying ctg_el_size: %lu; stream_el_size: %lu\n", ctg_size, stream_el_size);
 				//fflush(stdout);
 
-				uint64_t dma_source = (uint64_t) paramp->streambuf;
-				uint64_t dma_dest = (uint64_t)(paramp->userbuf + cur_elmp->curoffset);
+				uint32_t dma_source = (uint32_t) paramp->streambuf;
+				uint64_t dma_dest = paramp->userbuf + cur_elmp->curoffset;
 				uint32_t dma_size = ctg_size;
-				ptl_epu_dma_to_host(dma_source, dma_dest, dma_size, 0);
+				spin_cmd_t dma;
+
+				spin_dma_to_host(dma_dest, dma_source, dma_size, 0, &dma);
 				paramp->streambuf += ctg_size;
 			}
 			/*######### End DMA issue #########*/
@@ -1053,7 +1060,7 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 			cur_elmp->curblock--;
 			DLOOP_SEGMENT_PUSH;
 		} /* end of else push the stackelm */
-        asm("// loop end");
+        // asm("// loop end");
 	}	 /* end of for (;;) */
 
 	DLOOP_SEGMENT_SAVE_LOCAL_VALUES;
