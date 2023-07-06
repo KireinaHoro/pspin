@@ -1,6 +1,6 @@
 #pragma once
 
-#define HPU_ID(args) (args->cluster_id * NB_CORES + args->hpu_id)
+#define HPU_ID(args) (args->hpu_gid)
 #define HOST_ADDR(args)                                                        \
   (((uint64_t)args->task->host_mem_high << 32) | args->task->host_mem_low)
 #define HOST_ADDR_HPU(args) (HOST_ADDR(args) + HPU_ID(args) * PAGE_SIZE)

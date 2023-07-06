@@ -89,7 +89,7 @@ static inline uint16_t bswap_16(uint16_t v) {
 #define htons(x) bswap_16(x)
 #define ntohs htons
 
-#define SLMP_PAYLOAD_LEN(hdr) (ntohs(hdr->udp_hdr.length) - sizeof(udp_hdr_t) - sizeof(slmp_hdr_t))
+#define SLMP_PAYLOAD_LEN(hdrs) (ntohs(hdrs->udp_hdr.length) - sizeof(udp_hdr_t) - sizeof(slmp_hdr_t))
 
 // http://www.microhowto.info/howto/calculate_an_internet_protocol_checksum_in_c.html
 static inline uint16_t ip_checksum(void *vdata, size_t length) {
