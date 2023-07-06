@@ -105,8 +105,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
   // push performance statistics
   uint32_t end = cycles();
-  amo_add(&__host_data.perf_count, 1);
-  amo_add(&__host_data.perf_sum, end - start);
+  push_counter(&__host_data.counters[0], end - start);
 }
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,

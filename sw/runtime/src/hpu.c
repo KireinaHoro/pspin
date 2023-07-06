@@ -78,8 +78,10 @@ void hpu_entry() {
     init_handlers(&hh, &ph, &th, &handler_mem);
 
     // initialise performance counters
-    __host_data.perf_count = 0;
-    __host_data.perf_sum = 0;
+    for (int i = 0; i < MAX_COUNTERS; ++i) {
+      __host_data.counters[i].count = 0;
+      __host_data.counters[i].sum = 0;
+    }
   }
 
   // clear & enable counters

@@ -34,10 +34,16 @@ typedef uint32_t dma_t;
 typedef volatile uint32_t futex_t;
 
 // definition in link.ld
+struct perf_counter {
+  uint32_t sum;
+  uint32_t count;
+};
+
+#define MAX_COUNTERS 16
+
 struct host_data {
   uint64_t flag[CORE_COUNT];
-  uint32_t perf_count;
-  uint32_t perf_sum;
+  struct perf_counter counters[MAX_COUNTERS];
 };
 extern volatile struct host_data __host_data;
 
@@ -239,6 +245,11 @@ static inline uint32_t cycles() {
   uint32_t c;
   ecall_0(PSPIN_ECALL_CYCLES, c);
   return c;
+}
+
+static inline void push_counter(volatile struct perf_counter *c, uint32_t dur) {
+  amo_add(&c->count, 1);
+  amo_add(&c->sum, dur);
 }
 
 #endif
