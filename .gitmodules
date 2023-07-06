@@ -1,0 +1,3 @@
+[submodule "examples/datatypes/liblsb"]
+	path = examples/datatypes/liblsb
+	url = https://github.com/spcl/liblsb
