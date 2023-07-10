@@ -1,11 +1,27 @@
 #ifndef _DATALOOP_TYPES_
 #define _DATALOOP_TYPES_
 
+// PsPIN-side mpitypes config file for dataloops.
+
+#include <stdint.h>
+#include <assert.h>
+
 #define PREPEND_PREFIX(fn) MPIT_ ## fn
 
-// FIXME: was long unsigned int (uint64_t)
-#define MPI_Aint        uint32_t
+// The host side has 64-bit pointers (little endian).
+// We take the lower 32-bit word as pointer and ignore the higher (as padding).
+#define DECL_PTR(type, name) \
+    type name; \
+    uint32_t __padding##name;
+
+// need to match MPICH definition on host (used by typebuilder)
+// XXX: this is potentially inefficient on PsPIN (64-bit words are not native)
+#define MPI_Aint        uint64_t
 #define MPI_Datatype    void *
+
+static_assert(sizeof(MPI_Aint) == 8, "MPI_Aint on PsPIN should have the same size as MPICH definition");
+static_assert(sizeof(MPI_Datatype) == 4, "MPI_Datatype on PsPIN should have the same size as MPICH definition");
+
 #define MPI_SUCCESS     0
 
 enum {

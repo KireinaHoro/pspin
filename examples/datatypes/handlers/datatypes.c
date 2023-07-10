@@ -65,7 +65,8 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   uint32_t coreid = args->hpu_gid;
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
 
-  uint32_t last;
+  // FIXME: how to initialise?
+  uint64_t last = 0;
 
   slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
   uint8_t *slmp_pld = (uint8_t *)(task->pkt_mem) + sizeof(slmp_pkt_hdr_t);

@@ -2,7 +2,6 @@
 #define __DATATYPE_DESCR__
 
 #include <stdint.h>
-#include "dataloop_parts.h"
 
 #define REP
 
