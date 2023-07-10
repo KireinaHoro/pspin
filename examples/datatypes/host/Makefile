@@ -1,14 +1,13 @@
-CC ?= gcc
+CC = mpicc
 CFLAGS ?= -O3 -g -fsanitize=address -march=native
 LIBS ?= $(shell realpath ../../../../../../../../lib)
 
-HANDLERS_DIR := $(shell pwd)/..
-IMG_PATH := $(HANDLERS_DIR)/build/icmp_ping
+IMG_PATH := build/datatypes
 
-CFLAGS += -Wall -D__PSPIN_USER__
+CFLAGS += -Wall -D__FPSPIN_HOST__
 CPPFLAGS += -I$(LIBS) -D__IMG__=\"$(IMG_PATH)\"
-LDFLAGS += -L$(LIBS)/fpspin
-LDLIBS += -lfpspin
+LDFLAGS += -L$(LIBS)/fpspin -L$(PWD)/typebuilder/ -L$(PWD)/mpitypes/install/lib/
+LDLIBS += -lfpspin -ltypebuilder -lmpitypes
 
 LIBFPSPIN = $(LIBS)/fpspin/libfpspin.a
 
