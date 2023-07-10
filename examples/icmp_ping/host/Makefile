@@ -4,7 +4,7 @@ LIBS ?= $(shell realpath ../../../../../../../../lib)
 
 IMG_PATH := build/icmp_ping
 
-CFLAGS += -Wall -D__PSPIN_USER__
+CFLAGS += -Wall -D__FPSPIN_HOST__
 CPPFLAGS += -I$(LIBS) -D__IMG__=\"$(IMG_PATH)\"
 LDFLAGS += -L$(LIBS)/fpspin
 LDLIBS += -lfpspin
