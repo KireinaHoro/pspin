@@ -21,4 +21,4 @@ src/dataloop/typesize_support.c\
 src/dataloop/typesize_support.h
 
 mpitypes_headers += src/dataloop/dataloop_parts.h
-
+mpitypes_headers += src/dataloop/dataloop_create.h

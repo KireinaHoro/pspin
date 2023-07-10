@@ -149,7 +149,7 @@ int PREPEND_PREFIX(Segment_vector_m2m)(DLOOP_Offset *blocks_p,
     struct PREPEND_PREFIX(m2m_params) *paramp = v_paramp;
     char *cbufp;
 
-    cbufp = paramp->userbuf + rel_off;
+    cbufp = (char *)paramp->userbuf + rel_off;
     DLOOP_Handle_get_size_macro(el_type, el_size);
 
     whole_count = (blksz > 0) ? (*blocks_p / blksz) : 0;
@@ -296,7 +296,7 @@ int PREPEND_PREFIX(Segment_blkidx_m2m)(DLOOP_Offset *blocks_p,
     {
     char *dest;
     char const *src;
-    cbufp = paramp->userbuf + rel_off;
+    cbufp = (char *)paramp->userbuf + rel_off;
     DLOOP_Offset const *offsetp = offsetarray;
 
     /* Separate the loops into the 2 directions */
@@ -487,7 +487,7 @@ int PREPEND_PREFIX(Segment_index_m2m)(DLOOP_Offset *blocks_p,
 	DLOOP_Assert(curblock < count);
 	cur_block_sz = blockarray[curblock];
 
-	cbufp = paramp->userbuf + rel_off + offsetarray[curblock];
+	cbufp = (char *)paramp->userbuf + rel_off + offsetarray[curblock];
 
 	if (cur_block_sz > blocks_left) cur_block_sz = blocks_left;
 
@@ -537,7 +537,7 @@ void PREPEND_PREFIX(Segment_pack)(DLOOP_Segment *segp,
      * per-use structure instead. would require moving the parameters around a
      * bit. same applies to Segment_unpack below.
      */
-    params.userbuf   = segp->ptr;
+    params.userbuf   = (uint64_t)segp->ptr;
     params.streambuf = streambuf;
     params.direction = DLOOP_M2M_FROM_USERBUF;
 
@@ -558,7 +558,7 @@ void PREPEND_PREFIX(Segment_unpack)(DLOOP_Segment *segp,
 {
     struct PREPEND_PREFIX(m2m_params) params;
 
-    params.userbuf   = segp->ptr;
+    params.userbuf   = (uint64_t)segp->ptr;
     params.streambuf = streambuf;
     params.direction = DLOOP_M2M_TO_USERBUF;
 

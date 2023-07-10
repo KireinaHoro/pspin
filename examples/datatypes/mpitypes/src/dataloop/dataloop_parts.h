@@ -8,7 +8,13 @@
 #ifndef DATALOOP_PARTS_H
 #define DATALOOP_PARTS_H
 
+#include <stdint.h>
+
 /* Check that all the appropriate defines are present */
+#ifndef DECL_PTR
+#error "DECL_PTR must be defined before dataloop_parts.h is included."
+#endif
+
 #ifndef PREPEND_PREFIX
 #error "PREPEND_PREFIX must be defined before dataloop_parts.h is included."
 #endif
@@ -83,7 +89,7 @@
   S*/
 typedef struct DLOOP_Dataloop_contig {
     DLOOP_Count count;
-    struct DLOOP_Dataloop *dataloop;
+    DECL_PTR(struct DLOOP_Dataloop *, dataloop)
 } DLOOP_Dataloop_contig;
 
 /*S
@@ -100,7 +106,7 @@ typedef struct DLOOP_Dataloop_contig {
   S*/
 typedef struct DLOOP_Dataloop_vector { 
     DLOOP_Count count;
-    struct DLOOP_Dataloop *dataloop;
+    DECL_PTR(struct DLOOP_Dataloop *, dataloop)
     DLOOP_Count blocksize;
     DLOOP_Offset stride;
 } DLOOP_Dataloop_vector;
@@ -121,9 +127,9 @@ typedef struct DLOOP_Dataloop_vector {
   S*/
 typedef struct DLOOP_Dataloop_blockindexed {
     DLOOP_Count count;
-    struct DLOOP_Dataloop *dataloop;
+    DECL_PTR(struct DLOOP_Dataloop *, dataloop)
     DLOOP_Count blocksize;
-    DLOOP_Offset *offset_array;
+    DECL_PTR(DLOOP_Offset *, offset_array)
 } DLOOP_Dataloop_blockindexed;
 
 /*S
@@ -142,9 +148,9 @@ typedef struct DLOOP_Dataloop_blockindexed {
   S*/
 typedef struct DLOOP_Dataloop_indexed {
     DLOOP_Count count;
-    struct DLOOP_Dataloop *dataloop;
-    DLOOP_Count *blocksize_array;
-    DLOOP_Offset *offset_array;
+    DECL_PTR(struct DLOOP_Dataloop *, dataloop)
+    DECL_PTR(DLOOP_Count *, blocksize_array)
+    DECL_PTR(DLOOP_Offset *, offset_array)
     DLOOP_Count total_blocks;
 } DLOOP_Dataloop_indexed;
 
@@ -163,10 +169,10 @@ typedef struct DLOOP_Dataloop_indexed {
   S*/
 typedef struct DLOOP_Dataloop_struct {
     DLOOP_Count count;
-    struct DLOOP_Dataloop **dataloop_array;
-    DLOOP_Count            *blocksize_array;
-    DLOOP_Offset           *offset_array;
-    DLOOP_Offset           *el_extent_array; /* need more than one */
+    DECL_PTR(struct DLOOP_Dataloop **, dataloop_array)
+    DECL_PTR(DLOOP_Count            *, blocksize_array)
+    DECL_PTR(DLOOP_Offset           *, offset_array)
+    DECL_PTR(DLOOP_Offset           *, el_extent_array) /* need more than one */
 } DLOOP_Dataloop_struct;
 
 /* In many cases, we need the count and the next dataloop item. This
@@ -177,7 +183,7 @@ typedef struct DLOOP_Dataloop_struct {
 */
 typedef struct DLOOP_Dataloop_common {
     DLOOP_Count count;
-    struct DLOOP_Dataloop *dataloop;
+    DECL_PTR(struct DLOOP_Dataloop *, dataloop)
 } DLOOP_Dataloop_common;
 
 /*S
@@ -213,7 +219,7 @@ typedef struct DLOOP_Dataloop_common {
 
   S*/
 typedef struct DLOOP_Dataloop { 
-    int kind;                  /* Contains both the loop type 
+    int32_t kind;                  /* Contains both the loop type 
 				  (contig, vector, blockindexed, indexed,
 				  or struct) and a bit that indicates 
 				  whether the dataloop is a leaf type. */
@@ -267,7 +273,7 @@ typedef struct DLOOP_Dataloop {
 
 S*/
 typedef struct DLOOP_Dataloop_stackelm {
-    int may_require_reloading; /* indicates that items below might
+    int32_t may_require_reloading; /* indicates that items below might
 				* need reloading (e.g. this is a struct)
 				*/
 
@@ -279,7 +285,7 @@ typedef struct DLOOP_Dataloop_stackelm {
     DLOOP_Offset orig_offset;
     DLOOP_Count  orig_block;
 
-    struct DLOOP_Dataloop *loop_p;
+    DECL_PTR(struct DLOOP_Dataloop *, loop_p)
 } DLOOP_Dataloop_stackelm;
 
 /*S
@@ -295,15 +301,15 @@ typedef struct DLOOP_Dataloop_stackelm {
   Should this have an id for allocation and similarity purposes?
   S*/
 typedef struct DLOOP_Segment { 
-    void *ptr; /* pointer to datatype buffer */
+    DECL_PTR(void *, ptr) /* pointer to datatype buffer */
     DLOOP_Handle handle;
     DLOOP_Offset stream_off; /* next offset into data stream resulting from datatype
 		              * processing.  in other words, how many bytes have
 			      * we created/used by parsing so far?  that amount + 1.
 			      */
     DLOOP_Dataloop_stackelm stackelm[DLOOP_MAX_DATATYPE_DEPTH];
-    int  cur_sp;   /* Current stack pointer when using dataloop */
-    int  valid_sp; /* maximum valid stack pointer.  This is used to 
+    int32_t  cur_sp;   /* Current stack pointer when using dataloop */
+    int32_t  valid_sp; /* maximum valid stack pointer.  This is used to 
                       maintain information on the stack after it has
                       been placed there by following the datatype field
                       in a DLOOP_Dataloop_st for any type except struct */
@@ -414,9 +420,9 @@ void PREPEND_PREFIX(Segment_mpi_flatten)(DLOOP_Segment *segp,
 #define DLOOP_M2M_FROM_USERBUF 1
 
 struct PREPEND_PREFIX(m2m_params) {
-    int direction; /* M2M_TO_USERBUF or M2M_FROM_USERBUF */
-    char *streambuf;
-    char *userbuf;
+    int32_t direction; /* M2M_TO_USERBUF or M2M_FROM_USERBUF */
+    DECL_PTR(char *, streambuf) // NIC memory
+    uint64_t userbuf; // host memory
 };
 
 void PREPEND_PREFIX(Segment_pack)(struct DLOOP_Segment *segp,

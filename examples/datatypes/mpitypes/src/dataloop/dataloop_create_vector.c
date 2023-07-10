@@ -7,6 +7,8 @@
 
 #include "./dataloop.h"
 
+#include <stdio.h>
+
 /*@
    Dataloop_create_vector
 
@@ -90,7 +92,7 @@ int PREPEND_PREFIX(Dataloop_create_vector)(int icount,
     	DLOOP_Offset old_extent = 0;
 		//DLOOP_Handle_get_size_macro(oldtype, c_sz);
 		DLOOP_Handle_get_extent_macro(oldtype, old_extent);
-		printf("extend %d \n",old_extent);
+		printf("extend %ld \n",old_extent);
 
    		if( ( strideinbytes ?  iblocklength*old_extent : iblocklength ) ==  stride  ){
     	printf("ktaranov: Optimization when vec with stride == block\n");

@@ -7,6 +7,8 @@
 
 #include "./dataloop.h"
 
+#include <stdio.h>
+
 /*@
    Dataloop_contiguous - create the dataloop representation for a
    contiguous datatype

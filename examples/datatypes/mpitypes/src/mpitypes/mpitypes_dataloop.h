@@ -1,5 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; -*- */
 
+// Host-side mpitypes config file for dataloop.
+
 /*
  *  (C) 2001 by Argonne National Laboratory.
  *      See COPYRIGHT in top-level directory.
@@ -23,6 +25,13 @@
  */
 #define PREPEND_PREFIX(fn) MPIT_ ## fn
 
+/* On the host we always use normal pointers */
+#if !(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) || !__LP64__
+#error "We only support little endian 64-bit hosts"
+#endif
+
+#define DECL_PTR(type, name) type name;
+
 /* These following dataloop-specific types will be used throughout the DLOOP
  * instance:
  */
@@ -34,6 +43,9 @@
 #define DLOOP_VECTOR     struct MPIT_iovec
 #define DLOOP_VECTOR_LEN len
 #define DLOOP_VECTOR_BUF base
+
+static_assert(sizeof(MPI_Aint) == 8, "MPI_Aint on PsPIN should have the same size as MPICH definition");
+static_assert(sizeof(MPI_Datatype) == 4, "MPI_Datatype on PsPIN should have the same size as MPICH definition");
 
 /* a printf decimal format specifier for DLOOP_Offset */
 #define DLOOP_OFFSET_FMT_DEC_SPEC "%ld"

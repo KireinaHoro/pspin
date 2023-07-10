@@ -43,7 +43,7 @@ int MPIT_Type_memcpy(void *typeptr,
     mpi_errno = MPIT_Segment_init(typeptr, count, type, segp, 0);
     if (mpi_errno != MPI_SUCCESS) return mpi_errno;
 
-    params.userbuf   = typeptr;
+    params.userbuf   = (uint64_t) typeptr;
     params.streambuf = streamptr;
     params.direction = direction;
     last = end;
