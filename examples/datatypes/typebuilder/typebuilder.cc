@@ -21,7 +21,7 @@ void test_open(char * filename){
     void * mem = malloc(bytes);
 
     read_spin_datatype(mem, bytes, f);
-    remap_spin_datatype(mem, bytes, mem);
+    remap_spin_datatype(mem, bytes, (uint64_t) mem, false);
 
     fclose(f);
     free(mem);

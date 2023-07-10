@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eu
+set -eux
 
 MPITYPES_SRC="../mpitypes/src"
 MPITYPES_ROOT="../mpitypes/install"

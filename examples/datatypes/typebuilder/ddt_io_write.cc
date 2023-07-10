@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <mpitypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -35,11 +36,13 @@ void write_spin_datatype(MPI_Datatype t, MPIT_Segment *segp, int count, FILE *f)
     get_datatype_info(t, &(dt.info));
 
 
-    dt.params.userbuf = NULL;
+    dt.params.userbuf = (uint64_t)NULL;
     dt.params.direction = MPIT_MEMCPY_TO_USERBUF;
     dt.count = count;
 
-    assert(sizeof(MPI_Datatype) >= sizeof(type_info_t *)); //just to be safe
+    // XXX: we assume the entire datatype is smaller than uint32_t (4 GB)
+    //      so we can get away with storing offset into 32-bit types
+    // assert(sizeof(MPI_Datatype) >= sizeof(type_info_t *)); //just to be safe
 
     //spin_datatype_t comes first but we still have to fill it
     int ret = fseek(f, sizeof(spin_datatype_t), SEEK_CUR);
@@ -56,6 +59,8 @@ void write_spin_datatype(MPI_Datatype t, MPIT_Segment *segp, int count, FILE *f)
         size_t tocopy = sizeof(type_info);
         get_datatype_info(segp->stackelm[i].loop_p->el_type, &type_info);
 
+        // does the datatype get too big?
+        assert(offset < UINT32_MAX);
         segp->stackelm[i].loop_p->el_type = (MPI_Datatype) offset; //(MPI_Datatype) &(dt.subtypes_info_table[i]);
         DDTFWRITE(&type_info, tocopy, f, offset);
 
