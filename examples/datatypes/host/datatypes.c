@@ -119,6 +119,8 @@ int main(int argc, char *argv[]) {
 
   // copy to NIC memory
   fpspin_write_memory(&ctx, nic_mem_base, nic_buffer, nic_buffer_size);
+  free(nic_buffer);
+  free(datatype_mem_ptr_raw);
 
   // TODO: fastpath (_fp)
 
