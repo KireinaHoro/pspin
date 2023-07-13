@@ -82,12 +82,24 @@ typedef struct slmp_pkt_hdr {
   udp_hdr_t udp_hdr;
   slmp_hdr_t slmp_hdr;
 } __attribute__((__packed__)) slmp_pkt_hdr_t;
+#define MKEOM 0x8000
+#define MKSYN 0x4000
+#define MKACK 0x2000
+#define EOM(flags) ((flags) & MKEOM)
+#define SYN(flags) ((flags) & MKSYN)
+#define ACK(flags) ((flags) & MKACK)
 
+// little endian
 static inline uint16_t bswap_16(uint16_t v) {
   return ((v & 0xff) << 8) | (v >> 8);
 }
+static inline uint32_t bswap_32(uint32_t v) {
+  return (bswap_16((uint16_t)v) << 16) | bswap_16(v >> 16);
+}
 #define htons(x) bswap_16(x)
 #define ntohs htons
+#define htonl(x) bswap_32(x)
+#define ntohl htonl
 
 #define SLMP_PAYLOAD_LEN(hdrs) (ntohs(hdrs->udp_hdr.length) - sizeof(udp_hdr_t) - sizeof(slmp_hdr_t))
 
