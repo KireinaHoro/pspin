@@ -120,13 +120,14 @@ int main(int argc, char *argv[]) {
 
     if (expect_ack) {
       uint8_t ack[sizeof(slmp_hdr_t)];
-      size_t rcvd = recvfrom(sockfd, ack, sizeof(ack), 0, NULL, NULL);
+      ssize_t rcvd = recvfrom(sockfd, ack, sizeof(ack), 0, NULL, NULL);
       // we should be bound at this time == not setting addr
       if (rcvd < 0) {
         perror("recvfrom ACK");
         goto close_socket;
       } else if (rcvd != sizeof(slmp_hdr_t)) {
-        fprintf(stderr, "ACK size mismatch");
+        fprintf(stderr, "ACK size mismatch: expected %ld, got %ld\n",
+                sizeof(slmp_hdr_t), rcvd);
         goto close_socket;
       }
       slmp_hdr_t *hdr = (slmp_hdr_t *)ack;
