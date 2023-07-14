@@ -155,6 +155,7 @@ void int0_handler() {
   uint32_t mcause, mepc;
   read_csr(PULP_CSR_MCAUSE, mcause);
   read_csr(PULP_CSR_MEPC, mepc);
+  // mtval not implemented in PULP
 
   switch (mcause) {
   case 8: { // ECALL
@@ -190,9 +191,14 @@ void int0_handler() {
   case 2:
     handler_error("Illegal instruction");
     break;
-  case 5:
+  case 5: {
+    uint32_t saved;
+    read_csr(mscratch, saved);
+    volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
     handler_error("Load access fault");
+    dump_regs(saved_regs);
     break;
+  }
   case 7:
     handler_error("Store/AMO access fault");
     break;
