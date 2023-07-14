@@ -6,7 +6,9 @@
 #include <stdint.h>
 #include "../handlers/datatype_descr.h"
 
- #define DDTFWRITE(PTR, SIZE, F, OFF) {size_t t = fwrite(PTR, 1, SIZE, F); assert(t==SIZE); OFF += SIZE; assert(ftell(F) == OFF);}
+#include "ddt_io_write.h"
+
+#define DDTFWRITE(PTR, SIZE, F, OFF) {size_t t = fwrite(PTR, 1, SIZE, F); assert(t==SIZE); OFF += SIZE; assert(ftell(F) == OFF);}
 
 //taken from mpitypes_dataloop.c
 void get_datatype_info(MPI_Datatype t, type_info_t *info){

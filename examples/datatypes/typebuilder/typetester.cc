@@ -51,8 +51,8 @@ int main(int argc, char * argv[]){
     printf("Datatype string : %s\n", dtcompressed);
     printf("Count : %d\n", count);
 
-    LSB_Init("test", 0);    
     MPI_Init(&argc, &argv);
+    LSB_Init("test", 0);    
 
     /* build MPI Datatype */
     t = ddtparser_string2datatype(dtcompressed);
@@ -65,7 +65,9 @@ int main(int argc, char * argv[]){
     get_datatype_info(t, &(info));
 
 
-    uint32_t rcvbuff_size = info.true_lb + MAX(MAX(info.extent, info.true_extent), info.size)*count;
+    // uint32_t rcvbuff_size = info.true_lb + MAX(MAX(info.extent, info.true_extent), info.size)*count;
+    // FIXME: is this ok?
+    uint32_t rcvbuff_size = info.true_lb + MAX(info.extent, info.true_extent) * count;
     uint32_t sndbuff_size = info.size;
 
     rcvbuff = malloc(rcvbuff_size);

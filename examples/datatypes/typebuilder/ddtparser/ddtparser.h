@@ -3,6 +3,14 @@
 
 #include <mpi.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 MPI_Datatype ddtparser_string2datatype(char * str);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __DDTPARSER__ */
