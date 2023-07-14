@@ -23,6 +23,7 @@
 
 volatile sig_atomic_t exit_flag = 0;
 static void sigint_handler(int signum) { exit_flag = 1; }
+static int file_id = 0;
 
 int main(int argc, char *argv[]) {
   if (argc != 3) {
@@ -102,7 +103,8 @@ int main(int argc, char *argv[]) {
 
   // relocate datatype for NIC
   memcpy(nic_buffer_ddt_data, datatype_mem_ptr_raw, datatype_mem_size);
-  remap_spin_datatype(nic_buffer_ddt_data, datatype_mem_size, nic_ddt_pos, true);
+  remap_spin_datatype(nic_buffer_ddt_data, datatype_mem_size, nic_ddt_pos,
+                      true);
 
   spin_datatype_mem_t *nic_buffer_ddt_descr = (spin_datatype_mem_t *)nic_buffer;
   spin_datatype_t *nic_buffer_dt = (spin_datatype_t *)nic_buffer_ddt_data;
@@ -124,7 +126,7 @@ int main(int argc, char *argv[]) {
 
   // TODO: fastpath (_fp)
 
-  // loading finished - application logic from here
+  // loading finished - handle incoming messages
   while (true) {
     if (exit_flag) {
       printf("\nReceived SIGINT, exiting...\n");
@@ -132,21 +134,49 @@ int main(int argc, char *argv[]) {
     }
     for (int i = 0; i < NUM_HPUS; ++i) {
       uint64_t flag_to_host;
-      volatile uint8_t *pkt_addr;
-
-      if (!(pkt_addr = fpspin_pop_req(&ctx, i, &flag_to_host)))
+      if (!fpspin_pop_req(&ctx, i, &flag_to_host))
         continue;
 
       // got finished datatype from PsPIN
       // TODO: this should be asynchronous (to maximise overlapping ratio)
       uint64_t flag_from_host = MKFLAG(0);
+
+      // write received message to file
+      uint64_t msg_len = FLAG_LEN(flag_from_host);
+      uint8_t *msg_buf = (uint8_t *)ctx.cpu_addr + NUM_HPUS * PAGE_SIZE;
+      printf("Got message size=%ld\n", msg_len);
+
+      char filename_buf[FILENAME_MAX];
+      filename_buf[FILENAME_MAX-1] = 0;
+      snprintf(filename_buf, sizeof(filename_buf)-1, "recv_%d.out", file_id++);
+      FILE *fp = fopen(filename_buf, "wb");
+      if (!fp) {
+        perror("fopen");
+        goto ack_file;
+      }
+
+      if (fwrite(msg_buf, msg_len, 1, fp) != 1) {
+        perror("fwrite");
+        goto ack_file;
+      }
+      fclose(fp);
+
+      printf("Written file %s\n", filename_buf);
+
+ack_file:
       fpspin_push_resp(&ctx, i, flag_from_host);
     }
   }
 
   // get telemetry
-  uint32_t avg_cycles = fpspin_get_avg_cycles(&ctx);
-  printf("Handler cycles average: %d\n", avg_cycles);
+  fpspin_counter_t pkt_counter = fpspin_get_counter(&ctx, 0);
+  fpspin_counter_t msg_counter = fpspin_get_counter(&ctx, 1);
+
+  printf("Counters:\n");
+  printf("... pkt: %f cycles (%d iters)\n",
+         (float)pkt_counter.sum / pkt_counter.count, pkt_counter.count);
+  printf("... msg: %f cycles (%d iters)\n",
+         (float)msg_counter.sum / msg_counter.count, msg_counter.count);
 
   fpspin_exit(&ctx);
   return EXIT_SUCCESS;
