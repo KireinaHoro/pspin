@@ -3,10 +3,10 @@
 #include <arpa/inet.h>
 #include <asm-generic/socket.h>
 #include <assert.h>
-#include <bits/types/cookie_io_functions_t.h>
 #include <ctype.h>
 #include <errno.h>
 #include <immintrin.h>
+#include <netinet/in.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -17,9 +17,6 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-
-#define PAYLOAD_SIZE ((1462 / DMA_ALIGN) * DMA_ALIGN) // 1500 - 20 (IP) - 8 (UDP) - 10 (SLMP)
-#define SLMP_PORT 9330
 
 int main(int argc, char *argv[]) {
   int ret = EXIT_FAILURE;
@@ -62,86 +59,15 @@ int main(int argc, char *argv[]) {
   }
   fclose(fp);
 
-  int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  int sockfd = slmp_socket();
   if (sockfd < 0) {
     perror("open socket");
     goto free_buf;
   }
-  struct timeval tv = {
-      .tv_sec = 0,
-      .tv_usec = 100 * 1000, // 100ms
-  };
-  if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-    perror("setsockopt");
-    goto close_socket;
-  }
-
-  struct sockaddr_in server = {
-      .sin_family = AF_INET,
-      .sin_addr.s_addr = inet_addr(argv[1]),
-      .sin_port = htons(SLMP_PORT),
-  };
-
-  uint8_t packet[PAYLOAD_SIZE + sizeof(slmp_hdr_t)];
-  slmp_hdr_t *hdr = (slmp_hdr_t *)packet;
-  uint8_t *payload = packet + sizeof(slmp_hdr_t);
-
   uint32_t id = rand();
-  hdr->msg_id = htonl(id);
-  for (uint8_t *cur = file_buf; cur - file_buf < sz; cur += PAYLOAD_SIZE) {
-    bool expect_ack = true;
-    if (cur + PAYLOAD_SIZE >= file_buf + sz) {
-      // last packet requires synchronisation
-      hdr->flags = htons(MKEOM | MKSYN);
-    } else if (cur == file_buf) {
-      // first packet requires synchronisation
-      hdr->flags = htons(MKSYN);
-    } else {
-      hdr->flags = 0;
-      expect_ack = false;
-    }
+  in_addr_t server = inet_addr(argv[1]);
+  ret = slmp_sendmsg(sockfd, server, id, file_buf, sz);
 
-    uint32_t offset = cur - file_buf;
-    hdr->pkt_off = htonl(offset);
-
-    size_t left = sz - (cur - file_buf);
-    size_t to_copy = left > PAYLOAD_SIZE ? PAYLOAD_SIZE : left;
-
-    memcpy(payload, cur, to_copy);
-
-    // send the packet
-    if (sendto(sockfd, packet, to_copy + sizeof(slmp_hdr_t), 0,
-               (const struct sockaddr *)&server, sizeof(server)) < 0) {
-      perror("sendto");
-      goto close_socket;
-    }
-
-    printf("Sent packet offset=%d in msg #%d\n", offset, id);
-
-    if (expect_ack) {
-      uint8_t ack[sizeof(slmp_hdr_t)];
-      ssize_t rcvd = recvfrom(sockfd, ack, sizeof(ack), 0, NULL, NULL);
-      // we should be bound at this time == not setting addr
-      if (rcvd < 0) {
-        perror("recvfrom ACK");
-        goto close_socket;
-      } else if (rcvd != sizeof(slmp_hdr_t)) {
-        fprintf(stderr, "ACK size mismatch: expected %ld, got %ld\n",
-                sizeof(slmp_hdr_t), rcvd);
-        goto close_socket;
-      }
-      slmp_hdr_t *hdr = (slmp_hdr_t *)ack;
-      uint16_t flags = ntohs(hdr->flags);
-      if (!ACK(flags)) {
-        fprintf(stderr, "no ACK set in reply; flag=%#x\n", flags);
-        goto close_socket;
-      }
-    }
-  }
-
-  ret = EXIT_SUCCESS;
-
-close_socket:
   close(sockfd);
 
 free_buf:

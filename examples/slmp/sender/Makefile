@@ -4,6 +4,8 @@ LIBS ?= $(shell realpath ../../../../../../../../lib)
 
 CFLAGS += -Wall
 CPPFLAGS += -I$(LIBS) -D__FPSPIN_HOST__
+LDFLAGS += -L$(LIBS)/fpspin
+LDLIBS += -lfpspin
 
 BIN = slmp_sender
 
@@ -19,7 +21,8 @@ FORCE:
 	$(CC) $(ALL_CFLAGS) -c -o $@ $<
 
 $(BIN): sender.o
-	$(CC) $(ALL_CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(MAKE) -C $(LIBS)/fpspin
+	$(CC) $(ALL_CFLAGS) $(LDFLAGS) $< $(LDLIBS) -o $@
 
 clean:
 	rm -f $(BIN)

@@ -205,8 +205,8 @@ void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
   *ph = handlers[1];
   *th = handlers[2];
 
-  total_bytes = 0;
-  total_bytes_amo = 0;
-  end_of_message = 0;
-  end_of_message_amo = 0;
+  amo_store(&end_of_message, 0);
+  amo_store(&end_of_message_amo, 0);
+  amo_store(&total_bytes, 0);
+  amo_store(&total_bytes_amo, 0);
 }
