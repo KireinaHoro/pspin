@@ -18,7 +18,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define PAYLOAD_SIZE 1462 // 1500 - 20 (IP) - 8 (UDP) - 10 (SLMP)
+#define PAYLOAD_SIZE ((1462 / DMA_ALIGN) * DMA_ALIGN) // 1500 - 20 (IP) - 8 (UDP) - 10 (SLMP)
 #define SLMP_PORT 9330
 
 int main(int argc, char *argv[]) {
