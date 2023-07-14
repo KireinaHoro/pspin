@@ -1,2 +1,5 @@
 # typebuilder outputs
 *.out
+
+# LSB
+lsb.test.*
