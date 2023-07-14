@@ -18,17 +18,42 @@
 #include <spin_dma.h>
 #include <spin_host.h>
 
+#if 0
 #define DEBUG(...)                                                             \
   do {                                                                         \
     /* if (!args->hpu_gid) */                                                  \
     printf(__VA_ARGS__);                                                       \
+    rt_time_wait_cycles(10000);                                                \
   } while (0)
+#endif
+#define DEBUG(...)
 
 #define SIZE_MSG (128 * 1024 * 1024) // 128 MB
 #define MSG_PAGES (SIZE_MSG / PAGE_SIZE)
 
 static volatile uint32_t end_of_message;
+static volatile uint32_t end_of_message_amo;
 static volatile uint32_t total_bytes;
+static volatile uint32_t total_bytes_amo;
+static volatile uint32_t lock_owner;
+
+static inline void lock(handler_args_t *args) {
+  int res;
+  int counter = 0;
+  do {
+    res = compare_and_swap(&lock_owner, 0, HPU_ID(args) + 1);
+    if (res) {
+      rt_time_wait_cycles(50);
+      ++counter;
+      if (!(counter % 100000)) {
+        printf("Trying to lock...\n");
+        printf("Owner: %d @ %p\n", lock_owner, &lock_owner);
+      }
+    }
+  } while (res);
+}
+
+static inline void unlock() { amo_store(&lock_owner, 0); }
 
 static inline bool check_host_mem(handler_args_t *args) {
   // extra MSG_PAGES pages after the messaging pages
@@ -64,7 +89,9 @@ __handler__ void slmp_hh(handler_args_t *args) {
   task_t *task = args->task;
 
   amo_store(&end_of_message, 0);
+  amo_store(&end_of_message_amo, 0);
   amo_store(&total_bytes, 0);
+  amo_store(&total_bytes_amo, 0);
 
   slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
@@ -102,7 +129,8 @@ __handler__ void slmp_th(handler_args_t *args) {
   DEBUG("End of message: flow id %d, offset %d, payload size %d\n",
         task->flow_id, pkt_off, SLMP_PAYLOAD_LEN(hdrs));
 
-  DEBUG("EOM: %d; total bytes: %d\n", end_of_message, total_bytes);
+  DEBUG("EOM: %d (amo %d); total bytes: %d (amo %d)\n", end_of_message,
+        end_of_message_amo, total_bytes, total_bytes_amo);
 
   if (!SYN(flags) || !EOM(flags)) {
     printf("Error: last packet did not require SYN; flags = %#x\n", flags);
@@ -112,7 +140,7 @@ __handler__ void slmp_th(handler_args_t *args) {
   if (total_bytes != end_of_message) {
     printf("Error: total_bytes != end_of_message; %d vs %d\n", total_bytes,
            end_of_message);
-    return;
+    // XXX: should we abort here? AMO is playing weird...
   }
 
   // notify host for unpacked message -- 0-byte host request
@@ -139,15 +167,24 @@ __handler__ void slmp_ph(handler_args_t *args) {
         pkt_off, SLMP_PAYLOAD_LEN(hdrs));
 
   // update tail and total bytes counter
-  amo_add(&total_bytes, SLMP_PAYLOAD_LEN(hdrs));
+  amo_add(&total_bytes_amo, SLMP_PAYLOAD_LEN(hdrs));
+  uint32_t val;
+  uint32_t new_sum;
+  do {
+    val = total_bytes;
+    new_sum = val + SLMP_PAYLOAD_LEN(hdrs);
+  } while (!compare_and_swap(&total_bytes, val, new_sum));
 
-  uint32_t current_tail = pkt_off + SLMP_PAYLOAD_LEN(hdrs);
-  for (volatile uint32_t val = end_of_message;
-       val < current_tail &&
-       !compare_and_swap(&end_of_message, val, current_tail);)
-    ;
+  uint32_t curr_tail = pkt_off + SLMP_PAYLOAD_LEN(hdrs);
+  amo_maxu(&end_of_message_amo, curr_tail);
+  do {
+    val = end_of_message;
+    if (curr_tail <= val)
+      break;
+  } while (!compare_and_swap(&end_of_message, val, curr_tail));
 
-  printf("total_bytes=%d end_of_message=%d\n", total_bytes, end_of_message);
+  DEBUG("EOM: %d (amo %d); total bytes: %d (amo %d)\n", end_of_message,
+        end_of_message_amo, total_bytes, total_bytes_amo);
 
   if (!check_host_mem(args)) {
     printf("Host mem too small, skipping DMA\n");
@@ -167,4 +204,9 @@ void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];
+
+  total_bytes = 0;
+  total_bytes_amo = 0;
+  end_of_message = 0;
+  end_of_message_amo = 0;
 }
