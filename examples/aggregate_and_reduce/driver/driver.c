@@ -17,14 +17,21 @@
 
 int main(int argc, char**argv)
 {
-    const char *handlers_file = "build/aggregate_global";
-    const char *hh = NULL;
-    const char *ph = "aggregate_global_ph";
-    const char *th = "aggregate_global_th";
+    const char *handlers_file = "build/aggregate_and_reduce";
+    const char *hh_aggregate = NULL;
+    const char *ph_aggregate = "aggregate_global_ph";
+    const char *th_aggregate = "aggregate_global_th";
+    const char *hh_reduce = NULL;
+    const char *ph_reduce = "reduce_l1_ph";
+    const char *th_reduce = "reduce_l1_th";
     int ectx_num;
-
+    
     gdriver_init(argc, argv, NULL, &ectx_num);
-    gdriver_add_ectx(handlers_file, hh, ph, th, NULL, NULL, 0, NULL, 0);
+
+    gdriver_add_ectx(handlers_file, hh_aggregate, ph_aggregate, th_aggregate,
+	NULL, NULL, 0, NULL, 0);
+    gdriver_add_ectx(handlers_file, hh_reduce, ph_reduce, th_reduce,
+	NULL, NULL, 0, NULL, 0);
 
     gdriver_run();
 

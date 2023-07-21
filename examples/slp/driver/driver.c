@@ -1,4 +1,4 @@
-// Copyright 2020 ETH Zurich
+// Copyright 2022 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -143,23 +143,25 @@ uint32_t fill_packet(uint32_t msg_idx, uint32_t pkt_idx, uint8_t *pkt_buff, uint
 
 int main(int argc, char**argv)
 {
-    const char *handlers_file="build/slp_l1";
-    const char *hh="slp_l1_hh";
-    const char *ph="slp_l1_ph";
-    const char *th="slp_l1_th";
+    const char *handlers_file = "build/slp_l1";
+    const char *hh = "slp_l1_hh";
+    const char *ph = "slp_l1_ph";
+    const char *th = "slp_l1_th";
+    int ectx_num;
 
     srand(SEED);
 
     predict_only = getenv("PREDICT_ONLY") != NULL;
     if (predict_only) {
-      printf("Note: running prediction only");
+        printf("Note: running prediction only");
     }
 
-    gdriver_init(argc, argv, handlers_file, hh, ph, th);
-    gdriver_set_packet_fill_callback(fill_packet);
+    gdriver_init(argc, argv, NULL, &ectx_num);
+    gdriver_add_ectx(handlers_file, hh, ph, th, fill_packet, NULL, 0, NULL, 0);
 
     gdriver_run();
 
     gdriver_fini();
+
     return 0;
 }
