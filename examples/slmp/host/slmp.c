@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
 
       printf("Written file %s\n", filename_buf);
 
-ack_file:
+    ack_file:
       fpspin_push_resp(&ctx, i, flag_from_host);
     }
   }
@@ -92,7 +92,6 @@ ack_file:
   // get telemetry
   uint32_t avg_cycles = fpspin_get_avg_cycles(&ctx);
   printf("Handler cycles average: %d\n", avg_cycles);
-
 
   fpspin_exit(&ctx);
   return EXIT_SUCCESS;

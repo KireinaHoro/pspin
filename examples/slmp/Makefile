@@ -8,4 +8,6 @@ include ../generic_driver/gdriver.mk
 
 host:
 	$(MAKE) -C host/
-.PHONY: host all
+sender:
+	$(MAKE) -C sender/
+.PHONY: host sender all

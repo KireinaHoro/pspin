@@ -21,9 +21,16 @@
 int main(int argc, char *argv[]) {
   int ret = EXIT_FAILURE;
 
-  if (argc != 3) {
-    fprintf(stderr, "usage: %s <ip address> <file to transmit>\n", argv[0]);
+  if (argc < 3 || argc > 4) {
+    fprintf(stderr, "usage: %s <ip address> <file to transmit> [interval us]\n",
+            argv[0]);
     return ret;
+  }
+
+  int interval_us = 0;
+  if (argc == 4) {
+    // basic flow control in sending
+    interval_us = atoi(argv[3]);
   }
 
   srand(time(NULL));
@@ -66,7 +73,7 @@ int main(int argc, char *argv[]) {
   }
   uint32_t id = rand();
   in_addr_t server = inet_addr(argv[1]);
-  ret = slmp_sendmsg(sockfd, server, id, file_buf, sz);
+  ret = slmp_sendmsg(sockfd, server, id, file_buf, sz, interval_us);
 
   close(sockfd);
 
