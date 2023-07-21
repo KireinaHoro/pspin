@@ -53,20 +53,23 @@ int main(int argc, char *argv[]) {
       break;
     }
     for (int i = 0; i < NUM_HPUS; ++i) {
-      uint64_t flag_to_host;
-      uint64_t flag_from_host = MKFLAG(0);
+      fpspin_flag_t flag_to_host;
+      fpspin_flag_t flag_from_host = {
+          .len = 0,
+      };
 
       // we calculate the payload offset ourselves
       if (!fpspin_pop_req(&ctx, i, &flag_to_host))
         continue;
 
-      uint32_t file_len = FLAG_LEN(flag_to_host);
+      uint32_t file_len = flag_to_host.len;
       uint8_t *file_buf = (uint8_t *)ctx.cpu_addr + NUM_HPUS * PAGE_SIZE;
       printf("Received file len: %d\n", file_len);
 
       char filename_buf[FILENAME_MAX];
-      filename_buf[FILENAME_MAX-1] = 0;
-      snprintf(filename_buf, sizeof(filename_buf)-1, "recv_%d.out", file_id++);
+      filename_buf[FILENAME_MAX - 1] = 0;
+      snprintf(filename_buf, sizeof(filename_buf) - 1, "recv_%d.out",
+               file_id++);
       FILE *fp = fopen(filename_buf, "wb");
       if (!fp) {
         perror("fopen");

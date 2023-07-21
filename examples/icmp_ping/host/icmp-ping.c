@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
       break;
     }
     for (int i = 0; i < NUM_HPUS; ++i) {
-      uint64_t flag_to_host;
+      fpspin_flag_t flag_to_host;
       volatile uint8_t *pkt_addr;
 
       if (!(pkt_addr = fpspin_pop_req(&ctx, i, &flag_to_host)))
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
       volatile hdr_t *hdrs = (hdr_t *)pkt_addr;
       uint16_t ip_len = ntohs(hdrs->ip_hdr.length);
       uint16_t eth_len = sizeof(eth_hdr_t) + ip_len;
-      uint16_t flag_len = FLAG_LEN(flag_to_host);
+      uint16_t flag_len = flag_to_host.len;
       if (flag_len < eth_len) {
         printf("Warning: packet truncated; received %d, expected %d (from IP "
                "header)\n",
@@ -136,8 +136,7 @@ int main(int argc, char *argv[]) {
       hdrs->icmp_hdr.checksum =
           ip_checksum((uint8_t *)&hdrs->icmp_hdr, icmp_len);
 
-      uint64_t flag_from_host = MKFLAG(eth_len);
-      fpspin_push_resp(&ctx, i, flag_from_host);
+      fpspin_push_resp(&ctx, i, (fpspin_flag_t){.len = eth_len});
     }
   }
 

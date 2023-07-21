@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
       break;
     }
     for (int i = 0; i < NUM_HPUS; ++i) {
-      uint64_t flag_to_host;
+      fpspin_flag_t flag_to_host;
       volatile uint8_t *pkt_addr;
 
       if (!(pkt_addr = fpspin_pop_req(&ctx, i, &flag_to_host)))
@@ -95,9 +95,9 @@ int main(int argc, char *argv[]) {
       uint16_t udp_len = ntohs(hdrs->udp_hdr.length);
       uint16_t payload_len = udp_len - sizeof(udp_hdr_t);
 
-      /* printf("Received packet on HPU %d, flag %#lx (id %#lx, dma len %d, UDP "
-             "payload len %d):\n",
-             i, flag_to_host, FLAG_DMA_ID(flag_to_host), dma_len, payload_len); */
+      /* printf("Received packet on HPU %d, flag %#lx (id %#lx, dma len %d, UDP
+         " "payload len %d):\n", i, flag_to_host, FLAG_DMA_ID(flag_to_host),
+         dma_len, payload_len); */
 
       // to upper
       for (int pi = 0; pi < payload_len; ++pi) {
@@ -126,15 +126,13 @@ int main(int argc, char *argv[]) {
       // printf("Return packet:\n");
       // hexdump(pkt_addr, return_len);
 
-      uint64_t flag_from_host = MKFLAG(return_len);
-      fpspin_push_resp(&ctx, i, flag_from_host);
+      fpspin_push_resp(&ctx, i, (fpspin_flag_t){.len = return_len});
     }
   }
 
   // get telemetry
   uint32_t avg_cycles = fpspin_get_avg_cycles(&ctx);
   printf("Handler cycles average: %d\n", avg_cycles);
-
 
   fpspin_exit(&ctx);
   return EXIT_SUCCESS;

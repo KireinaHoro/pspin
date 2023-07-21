@@ -80,7 +80,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   hdrs->udp_hdr.dst_port = src_port;
 
   spin_cmd_t dma;
-  uint64_t flag_from_host;
+  fpspin_flag_t flag_from_host;
 
   if (DO_HOST_PING && fpspin_check_host_mem(args)) {
     // DMA packet data
@@ -90,7 +90,7 @@ __handler__ void pingpong_ph(handler_args_t *args) {
     DEBUG("Written packet data\n");
 
     flag_from_host = fpspin_host_req(args, pkt_len);
-    uint16_t host_pkt_len = FLAG_LEN(flag_from_host);
+    uint16_t host_pkt_len = flag_from_host.len;
 
     // DMA packet data back
     spin_dma_from_host(HOST_PLD_ADDR(args), (uint32_t)nic_pld_addr,
