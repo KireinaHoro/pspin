@@ -29,7 +29,7 @@ static inline bool fpspin_check_host_mem(handler_args_t *args) {
   return HOST_ADDR(args) && args->task->host_mem_size >= CORE_COUNT * PAGE_SIZE;
 }
 
-static inline fpspin_flag_t fpspin_host_req(handler_args_t *args, uint16_t len) {
+static inline fpspin_flag_t fpspin_host_req(handler_args_t *args, uint32_t len) {
   uint64_t flag_haddr = HOST_ADDR_HPU(args);
   spin_cmd_t dma;
 
