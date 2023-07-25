@@ -5,10 +5,15 @@
 #include <stdint.h>
 
 //##### MPITYPES
-//#define DDTCHECK
+#define DDTCHECK
 
 #ifdef DDTCHECK
-#define DDTASSERT(x) assert(x)
+#define DDTASSERT(x)                                                           \
+  do {                                                                         \
+    printf("Assertion failed (%s:%d): " #x "\n", __FILE__, __LINE__);          \
+    for (;;)                                                                   \
+      ;                                                                        \
+  } while (0)
 #else
 #define DDTASSERT(x)
 #endif
