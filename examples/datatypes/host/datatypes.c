@@ -19,7 +19,11 @@
 #include "../handlers/datatype_descr.h"
 #include "../handlers/datatypes.h"
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 #define PSPIN_DEV "/dev/pspin0"
+#define SIZE_MSG (128 * 1024 * 1024) // 128 MB
+#define MSG_PAGES (SIZE_MSG / PAGE_SIZE)
 
 volatile sig_atomic_t exit_flag = 0;
 static void sigint_handler(int signum) { exit_flag = 1; }
@@ -62,6 +66,11 @@ int main(int argc, char *argv[]) {
   uint32_t dtcount = dt_header->count;
   uint32_t dtblocks = dt_header->blocks;
 
+  // FIXME: assume count = 1
+  int count = 1;
+  uint32_t userbuf_size =
+      dtinfo.true_lb + MAX(dtinfo.extent, dtinfo.true_extent) * count;
+
   printf("Count: %u\n", dtcount);
   printf("Blocks: %u\n", dtblocks);
   printf("Size: %li\n", dtinfo.size);
@@ -84,6 +93,16 @@ int main(int argc, char *argv[]) {
             ctx.handler_mem.size, datatype_mem_size);
     goto fail;
   }
+
+  if (ctx.mmap_len < PAGE_SIZE * (MSG_PAGES + NUM_HPUS)) {
+    fprintf(stderr, "host dma area too small\n");
+    goto fail;
+  }
+
+  // XXX: race condition: need to finish init before enabling HER
+  
+  // clear host buffer
+  memset(ctx.cpu_addr, 0, ctx.mmap_len);
 
   // buffer area before copying onto the NIC
   size_t nic_buffer_size = sizeof(spin_datatype_mem_t) + datatype_mem_size +
@@ -133,18 +152,17 @@ int main(int argc, char *argv[]) {
       break;
     }
     for (int i = 0; i < NUM_HPUS; ++i) {
-      uint64_t flag_to_host;
+      fpspin_flag_t flag_to_host;
       if (!fpspin_pop_req(&ctx, i, &flag_to_host))
         continue;
 
       // got finished datatype from PsPIN
       // TODO: this should be asynchronous (to maximise overlapping ratio)
-      uint64_t flag_from_host = MKFLAG(0);
+      fpspin_flag_t flag_from_host = { .len = 0 };
 
       // write received message to file
-      uint64_t msg_len = FLAG_LEN(flag_from_host);
+      // we have fixed size userbuf from datatypes desc
       uint8_t *msg_buf = (uint8_t *)ctx.cpu_addr + NUM_HPUS * PAGE_SIZE;
-      printf("Got message size=%ld\n", msg_len);
 
       char filename_buf[FILENAME_MAX];
       filename_buf[FILENAME_MAX-1] = 0;
@@ -155,13 +173,14 @@ int main(int argc, char *argv[]) {
         goto ack_file;
       }
 
-      if (fwrite(msg_buf, msg_len, 1, fp) != 1) {
+      if (fwrite(msg_buf, userbuf_size, 1, fp) != 1) {
         perror("fwrite");
         goto ack_file;
       }
       fclose(fp);
 
       printf("Written file %s\n", filename_buf);
+      memset(msg_buf, 0, userbuf_size);
 
 ack_file:
       fpspin_push_resp(&ctx, i, flag_from_host);
