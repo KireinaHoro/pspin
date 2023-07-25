@@ -12,6 +12,8 @@ LDLIBS += -ltypebuilder -lmpitypes ../typebuilder/ddtparser/libddtparser.a
 LDFLAGS += -L$(LIBS)/fpspin
 LDLIBS += -lfpspin
 
+LIBFPSPIN = $(LIBS)/fpspin/libfpspin.a
+
 BIN = datatypes_sender
 
 GENDEPFLAGS = -MD -MP -MF .$(@F).d
@@ -22,11 +24,13 @@ all: $(BIN)
 
 FORCE:
 
+$(LIBFPSPIN): FORCE
+	$(MAKE) -C $(dir $@) $(notdir $@)
+
 %.o: %.c
 	$(CC) $(ALL_CFLAGS) -c -o $@ $<
 
-$(BIN): sender.o
-	$(MAKE) -C $(LIBS)/fpspin
+$(BIN): sender.o $(LIBFPSPIN)
 	$(CXX) $(ALL_CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 clean:

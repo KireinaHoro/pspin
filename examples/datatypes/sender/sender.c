@@ -124,7 +124,8 @@ int main(int argc, char *argv[]) {
       goto mpi_fini;
     }
 
-    ret = slmp_sendmsg(sockfd, server, rand(), streambuf, streambuf_size);
+    // no flow control for now
+    ret = slmp_sendmsg(sockfd, server, rand(), streambuf, streambuf_size, 0);
 
     close(sockfd);
   }

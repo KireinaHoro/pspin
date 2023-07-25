@@ -197,7 +197,7 @@ void int0_handler() {
     volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
     handler_error("Load access fault");
     dump_regs(saved_regs);
-    break;
+    for (;;);
   }
   case 7:
     handler_error("Store/AMO access fault");
