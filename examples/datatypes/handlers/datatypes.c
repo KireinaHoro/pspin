@@ -39,13 +39,64 @@
 // FIXME: this would break if we have interleaving messages
 static volatile uint32_t msg_start;
 
+#define SWAP(a, b, type)                                                       \
+  do {                                                                         \
+    type tmp = a;                                                              \
+    a = b;                                                                     \
+    b = tmp;                                                                   \
+  } while (0)
+
+static void prepare_hdrs_ack(slmp_pkt_hdr_t *hdrs, uint16_t flags) {
+  SWAP(hdrs->udp_hdr.dst_port, hdrs->udp_hdr.src_port, uint16_t);
+  SWAP(hdrs->ip_hdr.dest_id, hdrs->ip_hdr.source_id, uint32_t);
+  SWAP(hdrs->eth_hdr.dest, hdrs->eth_hdr.src, mac_addr_t);
+
+  hdrs->ip_hdr.length =
+      htons(sizeof(ip_hdr_t) + sizeof(udp_hdr_t) + sizeof(slmp_hdr_t));
+  hdrs->ip_hdr.checksum = 0;
+  hdrs->ip_hdr.checksum =
+      ip_checksum((uint8_t *)&hdrs->ip_hdr, sizeof(ip_hdr_t));
+  hdrs->udp_hdr.length = htons(
+      sizeof(slmp_hdr_t) + sizeof(udp_hdr_t)); // only SLMP header as payload
+  hdrs->udp_hdr.checksum = 0;
+  hdrs->slmp_hdr.flags = htons(flags);
+}
+
+static void send_ack(slmp_pkt_hdr_t *hdrs, task_t *task) {
+  prepare_hdrs_ack(hdrs, MKACK);
+
+  spin_cmd_t put;
+  spin_send_packet(task->pkt_mem, sizeof(slmp_pkt_hdr_t), &put);
+}
+
 __handler__ void datatypes_hh(handler_args_t *args) {
   DEBUG("Start of message (flow_id %d)\n", args->task->flow_id);
+
   msg_start = cycles();
+
+  task_t *task = args->task;
+  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
+  uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
+  uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
+
+  if (!SYN(flags)) {
+    printf("Error: first packet did not require SYN; flags = %#x\n", flags);
+    return;
+  }
 }
 
 __handler__ void datatypes_th(handler_args_t *args) {
   DEBUG("End of message (flow_id %d)\n", args->task->flow_id);
+
+  task_t *task = args->task;
+  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
+  uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
+  uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
+
+  if (!EOM(flags)) {
+    printf("Error: last packet did not have EOM; flags = %#x\n", flags);
+    return;
+  }
 
   // counter 1: message average time
   // FIXME: should this include the notification time?
@@ -53,6 +104,7 @@ __handler__ void datatypes_th(handler_args_t *args) {
 
   // notify host for unpacked message -- 0-byte host request
   // FIXME: this is synchronous; do we need an asynchronous interface?
+  // FIXME: len?
   fpspin_host_req(args, 0);
 }
 
@@ -74,6 +126,8 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
   uint8_t *slmp_pld = (uint8_t *)(task->pkt_mem) + sizeof(slmp_pkt_hdr_t);
   uint16_t slmp_pld_len = SLMP_PAYLOAD_LEN(hdrs);
+  uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
+
   uint32_t stream_start_offset = hdrs->slmp_hdr.pkt_off;
   uint32_t stream_end_offset = stream_start_offset + slmp_pld_len;
 
@@ -96,6 +150,11 @@ __handler__ void datatypes_ph(handler_args_t *args) {
                           &last, &dtmem->state[coreid].params);
 
   uint32_t end = cycles();
+
+  // send back ack, if the remote requests for it
+  if (SYN(flags)) {
+    send_ack(hdrs, task);
+  }
 
   // counter 0: per-packet average time
   push_counter(&__host_data.counters[0], end - start);
