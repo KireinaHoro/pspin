@@ -115,9 +115,6 @@ static inline bool check_host_mem(handler_args_t *args) {
 }
 
 __handler__ void datatypes_ph(handler_args_t *args) {
-  printf("Packet (size %d) flow_id %d\n", args->task->pkt_mem_size,
-         args->task->flow_id);
-
   task_t *task = args->task;
 
   uint32_t coreid = args->hpu_gid;
@@ -126,9 +123,14 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
   uint8_t *slmp_pld = (uint8_t *)(task->pkt_mem) + sizeof(slmp_pkt_hdr_t);
   uint16_t slmp_pld_len = SLMP_PAYLOAD_LEN(hdrs);
-  uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
 
-  uint32_t stream_start_offset = hdrs->slmp_hdr.pkt_off;
+  uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
+  uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
+
+  printf("Packet: offset %d, size %d, flow_id %d\n", pkt_off,
+         args->task->pkt_mem_size, args->task->flow_id);
+
+  uint32_t stream_start_offset = pkt_off;
   uint32_t stream_end_offset = stream_start_offset + slmp_pld_len;
 
   dtmem->state[coreid].params.streambuf = (void *)slmp_pld;
