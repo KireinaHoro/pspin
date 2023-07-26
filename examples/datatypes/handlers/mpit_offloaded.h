@@ -10,9 +10,11 @@
 #ifdef DDTCHECK
 #define DDTASSERT(x)                                                           \
   do {                                                                         \
-    printf("Assertion failed (%s:%d): " #x "\n", __FILE__, __LINE__);          \
-    for (;;)                                                                   \
-      ;                                                                        \
+    if (!(x)) {                                                                \
+      printf("Assertion failed (%s:%d): " #x "\n", __FILE__, __LINE__);        \
+      for (;;)                                                                 \
+        ;                                                                      \
+    }                                                                          \
   } while (0)
 #else
 #define DDTASSERT(x)
@@ -157,8 +159,7 @@ static inline void spin_segment_manipulate_fp(struct DLOOP_Segment *segp,
 			spin_segment_manipulate(segp, stream_off, &tmp_last, NULL);
 			/* --BEGIN ERROR HANDLING-- */
 			/* verify that we're in the right location */
-			if (tmp_last != first)
-				DDTASSERT(0);
+			DDTASSERT(tmp_last == first);
 			/* --END ERROR HANDLING-- */
 		}
 
@@ -239,7 +240,7 @@ static inline void spin_segment_manipulate_fp(struct DLOOP_Segment *segp,
 				}
 				break;
 			default:
-				DDTASSERT(0);
+				DDTASSERT(!"unknown dloop kind");
 				break;
 			}
 
@@ -429,7 +430,7 @@ static inline void spin_segment_manipulate_fp(struct DLOOP_Segment *segp,
 				break;
 			default:
 				/* --BEGIN ERROR HANDLING-- */
-				DDTASSERT(0);
+				DDTASSERT(!"unknown dloop kind");
 				break;
 				/* --END ERROR HANDLING-- */
 			}
@@ -467,7 +468,7 @@ static inline void spin_segment_manipulate_fp(struct DLOOP_Segment *segp,
 					break;
 				default:
 					/* --BEGIN ERROR HANDLING-- */
-					DDTASSERT(0);
+					DDTASSERT(!"unknown dloop kind");
 					break;
 					/* --END ERROR HANDLING-- */
 				}
@@ -509,7 +510,7 @@ static inline void spin_segment_manipulate_fp(struct DLOOP_Segment *segp,
 				break;
 			default:
 				/* --BEGIN ERROR HANDLING-- */
-				DDTASSERT(0);
+				DDTASSERT(!"unknown dloop kind");
 				break;
 				/* --END ERROR HANDLING-- */
 			}
@@ -544,7 +545,7 @@ static inline void spin_segment_manipulate_fp(struct DLOOP_Segment *segp,
 				break;
 			default:
 				/* --BEGIN ERROR HANDLING-- */
-				DDTASSERT(0);
+				DDTASSERT(!"unknown dloop kind");
 				break;
 				/* --END ERROR HANDLING-- */
 			}
@@ -724,8 +725,7 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 
 			/* --BEGIN ERROR HANDLING-- */
 			/* verify that we're in the right location */
-			if (tmp_last != first)
-				DDTASSERT(0);
+			DDTASSERT(tmp_last == first);
 			/* --END ERROR HANDLING-- */
 		}
 
@@ -942,7 +942,7 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 				break;
 			default:
 				/* --BEGIN ERROR HANDLING-- */
-				DDTASSERT(0);
+				DDTASSERT(!"unknown dloop kind");
 				break;
 				/* --END ERROR HANDLING-- */
 			}
@@ -980,7 +980,7 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 					break;
 				default:
 					/* --BEGIN ERROR HANDLING-- */
-					DDTASSERT(0);
+					DDTASSERT(!"unknown dloop kind");
 					break;
 					/* --END ERROR HANDLING-- */
 				}
@@ -1022,7 +1022,7 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 				break;
 			default:
 				/* --BEGIN ERROR HANDLING-- */
-				DDTASSERT(0);
+				DDTASSERT(!"unknown dloop kind");
 				break;
 				/* --END ERROR HANDLING-- */
 			}
@@ -1057,7 +1057,7 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 				break;
 			default:
 				/* --BEGIN ERROR HANDLING-- */
-				DDTASSERT(0);
+				DDTASSERT(!"unknown dloop kind");
 				break;
 				/* --END ERROR HANDLING-- */
 			}
@@ -1106,7 +1106,7 @@ static inline DLOOP_Count DLOOP_Stackelm_blocksize(struct DLOOP_Dataloop_stackel
 		break;
 	default:
 		/* --BEGIN ERROR HANDLING-- */
-		DDTASSERT(0);
+		DDTASSERT(!"unknown dloop kind");
 		break;
 		/* --END ERROR HANDLING-- */
 	}
@@ -1144,7 +1144,7 @@ static inline DLOOP_Offset DLOOP_Stackelm_offset(struct DLOOP_Dataloop_stackelm 
 		break;
 	default:
 		/* --BEGIN ERROR HANDLING-- */
-		DDTASSERT(0);
+		DDTASSERT(!"unknown dloop kind");
 		break;
 		/* --END ERROR HANDLING-- */
 	}

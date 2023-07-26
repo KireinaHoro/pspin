@@ -134,7 +134,9 @@ int main(int argc, char *argv[]) {
       (spin_core_state_t *)(nic_ddt_pos + datatype_mem_size);
 
   for (int i = 0; i < NUM_HPUS; ++i) {
+    // TODO: HPU-local: each HPU has its own copy of the segment
     nic_buffer_state[i].state = nic_buffer_dt->seg;
+
     nic_buffer_state[i].params = nic_buffer_dt->params;
   }
 
