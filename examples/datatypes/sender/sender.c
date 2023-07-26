@@ -118,16 +118,16 @@ int main(int argc, char *argv[]) {
     ret = EXIT_SUCCESS;
   } else {
     // send streambuf in SLMP
-    int sockfd = slmp_socket();
-    if (sockfd < 0) {
+    slmp_sock_t sock;
+    if (slmp_socket(&sock, true)) {
       perror("open socket");
       goto mpi_fini;
     }
 
     // no flow control for now
-    ret = slmp_sendmsg(sockfd, server, rand(), streambuf, streambuf_size, 0);
+    ret = slmp_sendmsg(&sock, server, rand(), streambuf, streambuf_size, 0);
 
-    close(sockfd);
+    slmp_close(&sock);
   }
 
 mpi_fini:

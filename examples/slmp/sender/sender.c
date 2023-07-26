@@ -66,16 +66,16 @@ int main(int argc, char *argv[]) {
   }
   fclose(fp);
 
-  int sockfd = slmp_socket();
-  if (sockfd < 0) {
+  slmp_sock_t sock;
+  if (slmp_socket(&sock, false)) {
     perror("open socket");
     goto free_buf;
   }
   uint32_t id = rand();
   in_addr_t server = inet_addr(argv[1]);
-  ret = slmp_sendmsg(sockfd, server, id, file_buf, sz, interval_us);
+  ret = slmp_sendmsg(&sock, server, id, file_buf, sz, interval_us);
 
-  close(sockfd);
+  slmp_close(&sock);
 
 free_buf:
   free(file_buf);
