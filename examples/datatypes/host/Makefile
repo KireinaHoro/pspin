@@ -7,7 +7,7 @@ IMG_PATH := build/datatypes
 CFLAGS += -Wall -D__FPSPIN_HOST__
 CPPFLAGS += -I$(LIBS) -D__IMG__=\"$(IMG_PATH)\"
 LDFLAGS += -L$(LIBS)/fpspin -L$(PWD)/typebuilder/ -L$(PWD)/mpitypes/install/lib/
-LDLIBS += -lfpspin -ltypebuilder -lmpitypes
+LDLIBS += -lfpspin -ltypebuilder -lmpitypes -lopenblas
 
 LIBFPSPIN = $(LIBS)/fpspin/libfpspin.a
 

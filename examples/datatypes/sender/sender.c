@@ -31,7 +31,7 @@ bool is_golden;
 
 _Noreturn void usage(char *argv0) {
   fprintf(stderr,
-          "usage: %s <type string> <count> <test|golden> "
+          "usage: %s <type string> <count> <test|golden|bench> "
           "<server|golden filename>\n",
           argv0);
   exit(EXIT_FAILURE);
@@ -51,6 +51,10 @@ int main(int argc, char *argv[]) {
     server = inet_addr(argv[4]);
   } else if (!strcmp(argv[3], "golden")) {
     is_golden = true;
+  } else if (!strcmp(argv[3], "bench")) {
+    // TODO: benchmark mode; loop:
+    //   receive rts
+    //   send message
   } else {
     usage(argv[0]);
   }

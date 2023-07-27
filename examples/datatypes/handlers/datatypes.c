@@ -115,6 +115,9 @@ static inline bool check_host_mem(handler_args_t *args) {
 }
 
 __handler__ void datatypes_ph(handler_args_t *args) {
+  // TOOD: disable assertions in DDT
+  // TODO: disable prints
+
   task_t *task = args->task;
 
   uint32_t coreid = args->hpu_gid;
