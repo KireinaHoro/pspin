@@ -269,6 +269,14 @@ int main(int argc, char *argv[]) {
       perror("open rts socket");
       goto mpi_fini;
     }
+    struct sockaddr_in server = {
+        .sin_family = AF_INET,
+        .sin_port = htons(args.rts_port),
+    };
+    if (bind(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0) {
+      perror("bind rts socket");
+      goto mpi_fini;
+    }
     while (true) {
       // receive RTS
       if (recvfrom(sockfd, &rts, sizeof(rts), 0, (struct sockaddr *)&from,
