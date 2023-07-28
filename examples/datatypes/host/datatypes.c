@@ -239,8 +239,7 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
 
   app_data->num_elements = dtcount;
   app_data->userbuf_size =
-      dtinfo.true_lb +
-      MAX(dtinfo.extent, dtinfo.true_extent) * dtcount;
+      dtinfo.true_lb + MAX(dtinfo.extent, dtinfo.true_extent) * dtcount;
   printf("Userbuf size: %d\n", app_data->userbuf_size);
 
   fpspin_ruleset_t rs;
@@ -324,6 +323,10 @@ static void finish_datatypes_spin(fpspin_ctx_t *ctx) {
   free(app_data->C);
   close(app_data->rts_sockfd);
   free(app_data);
+
+  // wait until all stdout are flushed
+  printf("Waiting for stdout flush...\n");
+  sleep(2);
   fpspin_exit(ctx);
 }
 
