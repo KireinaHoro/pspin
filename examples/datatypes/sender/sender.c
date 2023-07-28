@@ -200,16 +200,24 @@ int main(int argc, char *argv[]) {
   MPIT_Type_init(t);
 
   if (args.mode == MODE_REFERENCE) {
+    printf("==> Reference mode\n");
     FILE *fp = fopen(args.out_file, "wb");
     if (!fp) {
       perror("fopen golden");
       goto fail;
     }
 
+    FILE *ddt_fp = fopen(args.ddt_out_file, "wb");
+    if (!ddt_fp) {
+      perror("fopen ddt bin");
+      goto fail;
+    }
+
+    // save manipulated userbuf to file
+    // XXX: write_spin_datatype corrupts MPI_Datatype so we should do this first
     buffers_t bufs = prepare_buffers(&info, &args, t);
     update_userbuf_local(&bufs, &info, &args, t);
 
-    // save manipulated userbuf to file
     if (fwrite(bufs.userbuf, bufs.userbuf_size, 1, fp) != 1) {
       perror("fwrite");
       goto mpi_fini;
@@ -218,8 +226,32 @@ int main(int argc, char *argv[]) {
     printf("Golden result written to %s\n", args.out_file);
     fclose(fp);
 
+    // compile DDT bin to keep in sync -- taken from typebuilder.cc
+    MPIT_Type_debug(t);
+
+    type_info_t info;
+    get_datatype_info(t, &(info));
+    size_t ddt_len = info.true_extent * args.num_elements;
+    void *buffer = malloc(ddt_len);
+    memset(buffer, 0, ddt_len);
+
+    MPIT_Segment *segp = MPIT_Segment_alloc(); // the segment is the state of a
+                                               // dataloop processing
+    int mpi_errno = MPIT_Segment_init(buffer, args.num_elements, t, segp, 0);
+    if (mpi_errno != MPI_SUCCESS) {
+      fprintf(stderr, "failed to init MPIT segment\n");
+      goto fail;
+    }
+    write_spin_datatype(t, segp, args.num_elements, ddt_fp);
+    fclose(ddt_fp);
+    free(buffer);
+
+    printf("DDT description binary written to %s\n", args.ddt_out_file);
+
     ret = EXIT_SUCCESS;
   } else {
+    printf("==> Sending mode, waiting for RTS\n");
+
     // send streambuf in SLMP
     slmp_sock_t sock;
     // datatypes require word alignment
@@ -245,6 +277,12 @@ int main(int argc, char *argv[]) {
         goto slmp_close;
       }
       args.num_elements = rts.elem_count;
+
+      char str[40];
+      inet_ntop(AF_INET, &from.sin_addr.s_addr, str, sizeof(str));
+
+      printf("... RTS @ %s: %d datatypes, %d parallel msgs\n", str,
+             rts.elem_count, rts.num_parallel_msgs);
 
       buffers_t bufs = prepare_buffers(&info, &args, t);
 
