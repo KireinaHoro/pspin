@@ -34,7 +34,6 @@ struct arguments {
     MODE_BENCHMARK,
   } mode;
   const char *out_file;
-  int num_elements;
   // benchmark mode
   int num_iterations;
   int num_trials;
@@ -106,9 +105,6 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   case 'o':
     args->out_file = arg;
     break;
-  case 'e':
-    args->num_elements = atoi(arg);
-    break;
   case 'i':
     args->num_iterations = atoi(arg);
     break;
@@ -157,6 +153,8 @@ typedef struct {
   uint32_t userbuf_size;
   int num_received; // received number of messages so far
 
+  int num_elements; // number of datatype elements, from DDT bin
+
   int dim; // dimension of dgemm matrices - current trial
   double *A, *B, *C;
 
@@ -183,7 +181,6 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
       .pspin_dev = "/dev/pspin0",
       .dest_ctx = 0,
       .mode = MODE_BENCHMARK,
-      .num_elements = 1,
       .num_iterations = 100,
       .num_trials = 10,
       .num_parallel_msgs = 1,
@@ -240,9 +237,10 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
   printf("True extent: %li\n", dtinfo.true_extent);
   printf("True LB: %li\n", dtinfo.true_lb);
 
+  app_data->num_elements = dtcount;
   app_data->userbuf_size =
       dtinfo.true_lb +
-      MAX(dtinfo.extent, dtinfo.true_extent) * args->num_elements;
+      MAX(dtinfo.extent, dtinfo.true_extent) * dtcount;
   printf("Userbuf size: %d\n", app_data->userbuf_size);
 
   fpspin_ruleset_t rs;
@@ -399,7 +397,7 @@ void send_rts(fpspin_ctx_t *ctx) {
 
   datatypes_rts_t rts = {
       .num_parallel_msgs = args->num_parallel_msgs,
-      .elem_count = args->num_elements,
+      .elem_count = app_data->num_elements,
   };
 
   struct sockaddr_in server = {
@@ -412,6 +410,12 @@ void send_rts(fpspin_ctx_t *ctx) {
              (const struct sockaddr *)&server, sizeof(server)) < 0) {
     perror("sendto");
   }
+
+  char str[40];
+  inet_ntop(AF_INET, &args->rts_server, str, sizeof(str));
+
+  printf("Sent RTS to %s: %d datatypes, %d parallel msgs\n", str,
+         rts.elem_count, rts.num_parallel_msgs);
 }
 
 // dim: dimension of dgemm
