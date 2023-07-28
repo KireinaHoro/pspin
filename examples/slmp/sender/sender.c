@@ -67,7 +67,8 @@ int main(int argc, char *argv[]) {
   fclose(fp);
 
   slmp_sock_t sock;
-  if (slmp_socket(&sock, false)) {
+  // TODO: experiment with different aligns for speed
+  if (slmp_socket(&sock, false, DMA_ALIGN)) {
     perror("open socket");
     goto free_buf;
   }

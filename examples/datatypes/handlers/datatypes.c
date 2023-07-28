@@ -130,8 +130,8 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
 
-  printf("Packet: offset %d, size %d, flow_id %d\n", pkt_off,
-         args->task->pkt_mem_size, args->task->flow_id);
+  printf("Packet: offset %d, pld size %d, flow_id %d\n", pkt_off, slmp_pld_len,
+         args->task->flow_id);
 
   uint32_t stream_start_offset = pkt_off;
   uint32_t stream_end_offset = stream_start_offset + slmp_pld_len;

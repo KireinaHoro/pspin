@@ -222,7 +222,8 @@ int main(int argc, char *argv[]) {
   } else {
     // send streambuf in SLMP
     slmp_sock_t sock;
-    if (slmp_socket(&sock, true)) {
+    // datatypes require word alignment
+    if (slmp_socket(&sock, true, 4)) {
       perror("open socket");
       goto mpi_fini;
     }
