@@ -23,7 +23,7 @@ extern "C" int yylex (void);
 void yyerror(const char *);
 
 typedef struct yy_buffer_state * YY_BUFFER_STATE;
-extern "C" YY_BUFFER_STATE yy_scan_string(char *str);
+extern "C" YY_BUFFER_STATE yy_scan_string(const char *str);
 extern "C" void yy_delete_buffer(YY_BUFFER_STATE buffer);
 
 unsigned long long g_timerfreq;
@@ -624,7 +624,7 @@ do {                                                   \
 	median = HRT_GET_USEC(times[NUMRUNS/2]);           \
 } while(0)
 
-MPI_Datatype ddtparser_string2datatype(char * str){
+MPI_Datatype ddtparser_string2datatype(const char * str){
 
     YY_BUFFER_STATE buff = yy_scan_string(str);
     assert(yyparse() == 0);

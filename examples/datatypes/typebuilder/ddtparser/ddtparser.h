@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-MPI_Datatype ddtparser_string2datatype(char * str);
+MPI_Datatype ddtparser_string2datatype(const char * str);
 
 #ifdef __cplusplus
 }
