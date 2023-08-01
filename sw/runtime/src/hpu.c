@@ -30,7 +30,10 @@ typedef struct hpu_descr {
 
 volatile __attribute__((section(".data_tiny_l1")))
 hpu_descr_t *volatile hpu_descr[NUM_CLUSTER_HPUS];
-uint8_t dma_idx[CORE_COUNT];
+
+// virtualised with each cluster
+volatile __attribute__((section(".data_tiny_l1")))
+uint8_t dma_idx[NUM_CLUSTER_HPUS];
 
 void hpu_run() {
   handler_args_t handler_args;

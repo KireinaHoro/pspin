@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spin_conf.h"
 #include <stdint.h>
 typedef struct {
   union {
@@ -23,7 +24,7 @@ static_assert(sizeof(fpspin_flag_t) == sizeof(uint64_t),
 #define DMA_BUS_WIDTH 512
 #define DMA_ALIGN (DMA_BUS_WIDTH / 8)
 
-extern uint8_t dma_idx[CORE_COUNT];
+extern volatile uint8_t dma_idx[NUM_CLUSTER_HPUS];
 
 static inline bool fpspin_check_host_mem(handler_args_t *args) {
   return HOST_ADDR(args) && args->task->host_mem_size >= CORE_COUNT * PAGE_SIZE;
@@ -34,9 +35,8 @@ static inline fpspin_flag_t fpspin_host_req(handler_args_t *args, uint32_t len) 
   spin_cmd_t dma;
 
   // prepare host notification
-  ++dma_idx[HPU_ID(args)];
   fpspin_flag_t flag_to_host = {
-      .dma_id = dma_idx[HPU_ID(args)],
+      .dma_id = ++dma_idx[args->hpu_id],
       .len = len,
       .hpu_id = HPU_ID(args),
   };
