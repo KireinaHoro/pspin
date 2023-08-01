@@ -7,3 +7,6 @@
 [submodule "examples/datatypes/handlers/umm_malloc"]
 	path = examples/datatypes/handlers/umm_malloc
 	url = https://github.com/rhempel/umm_malloc/
+[submodule "hw/deps/axi_riscv_atomics"]
+	path = hw/deps/axi_riscv_atomics
+	url = https://github.com/pulp-platform/axi_riscv_atomics

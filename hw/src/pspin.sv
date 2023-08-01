@@ -800,7 +800,8 @@ module pspin #(
     .AXI_USER_WIDTH     (AXI_UW),
     .AXI_MAX_READ_TXNS  (4),
     .AXI_MAX_WRITE_TXNS (4),
-    .RISCV_WORD_WIDTH   (32)
+    .RISCV_WORD_WIDTH   (32),
+    .N_AXI_CUT          (1)
   ) i_atomics (
     .clk_i,
     .rst_ni,
