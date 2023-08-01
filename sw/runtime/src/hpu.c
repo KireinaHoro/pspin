@@ -18,6 +18,8 @@
 #include "spin_conf.h"
 #include "util.h"
 
+#include "shim.h"
+
 #define MSTATUS_USER (3 << 11)
 
 extern void rt_vec();
@@ -59,6 +61,11 @@ void __attribute__((optimize(0))) cluster_init() {
   hal_icache_cluster_enable(cluster_id);
 }
 
+// FIXME: can we do this entirely in the linker script?
+extern uintptr_t __l2_heap_start, __l2_heap_size;
+void *UMM_MALLOC_CFG_HEAP_ADDR;
+uint32_t UMM_MALLOC_CFG_HEAP_SIZE;
+
 void hpu_entry() {
 
   uint32_t core_id = rt_core_id();
@@ -71,18 +78,6 @@ void hpu_entry() {
 
   // if (cluster_id == 0 && core_id == 1)
   printf("HPU (%lu, %lu) hello from %s\n", cluster_id, core_id, __func__);
-
-  if (core_id == 0 && cluster_id == 0) {
-    handler_fn hh, ph, th;
-    void *handler_mem;
-    init_handlers(&hh, &ph, &th, &handler_mem);
-
-    // initialise performance counters
-    for (int i = 0; i < MAX_COUNTERS; ++i) {
-      __host_data.counters[i].count = 0;
-      __host_data.counters[i].sum = 0;
-    }
-  }
 
   // clear & enable counters
   uint32_t reset_val = 0;
@@ -98,6 +93,29 @@ void hpu_entry() {
   write_csr(PULP_CSR_MEPC, hpu_run);
 
   write_csr(PULP_CSR_MTVEC, rt_vec);
+
+  // after exception handler so we can catch errors in user init
+  if (core_id == 0 && cluster_id == 0) {
+    handler_fn hh, ph, th;
+    void *handler_mem;
+    init_handlers(&hh, &ph, &th, &handler_mem);
+
+    // initialise performance counters
+    for (int i = 0; i < MAX_COUNTERS; ++i) {
+      __host_data.counters[i].count = 0;
+      __host_data.counters[i].sum = 0;
+    }
+  }
+
+  UMM_MALLOC_CFG_HEAP_ADDR = &__l2_heap_start;
+  UMM_MALLOC_CFG_HEAP_SIZE = (uint32_t)&__l2_heap_size;
+
+  if (core_id == 0) {
+    umm_init();
+    if (cluster_id == 0) {
+      umm_info(0, true);
+    }
+  }
 
   // we save these now because can't access them in user mode
   write_register(x10, cluster_id);
@@ -121,34 +139,34 @@ typedef struct {
 } __attribute__((packed)) saved_regs_t;
 
 void dump_regs(volatile saved_regs_t *a) {
-  printf("ra=%#x\n", a->ra);
-  printf("a0=%#x\n", a->a0);
-  printf("a1=%#x\n", a->a1);
-  printf("a2=%#x\n", a->a2);
-  printf("a3=%#x\n", a->a3);
-  printf("a4=%#x\n", a->a4);
-  printf("a5=%#x\n", a->a5);
-  printf("a6=%#x\n", a->a6);
-  printf("a7=%#x\n", a->a7);
-  printf("t0=%#x\n", a->t0);
-  printf("t1=%#x\n", a->t1);
-  printf("t2=%#x\n", a->t2);
-  printf("t3=%#x\n", a->t3);
-  printf("t4=%#x\n", a->t4);
-  printf("t5=%#x\n", a->t5);
-  printf("t6=%#x\n", a->t6);
-  printf("s0=%#x\n", a->s0);
-  printf("s1=%#x\n", a->s1);
-  printf("s2=%#x\n", a->s2);
-  printf("s3=%#x\n", a->s3);
-  printf("s4=%#x\n", a->s4);
-  printf("s5=%#x\n", a->s5);
-  printf("s6=%#x\n", a->s6);
-  printf("s7=%#x\n", a->s7);
-  printf("s8=%#x\n", a->s8);
-  printf("s9=%#x\n", a->s9);
-  printf("s10=%#x\n", a->s10);
-  printf("s11=%#x\n", a->s11);
+  printf("ra=0x%08x\n", a->ra);
+  printf("a0=0x%08x\n", a->a0);
+  printf("a1=0x%08x\n", a->a1);
+  printf("a2=0x%08x\n", a->a2);
+  printf("a3=0x%08x\n", a->a3);
+  printf("a4=0x%08x\n", a->a4);
+  printf("a5=0x%08x\n", a->a5);
+  printf("a6=0x%08x\n", a->a6);
+  printf("a7=0x%08x\n", a->a7);
+  printf("t0=0x%08x\n", a->t0);
+  printf("t1=0x%08x\n", a->t1);
+  printf("t2=0x%08x\n", a->t2);
+  printf("t3=0x%08x\n", a->t3);
+  printf("t4=0x%08x\n", a->t4);
+  printf("t5=0x%08x\n", a->t5);
+  printf("t6=0x%08x\n", a->t6);
+  printf("s0=0x%08x\n", a->s0);
+  printf("s1=0x%08x\n", a->s1);
+  printf("s2=0x%08x\n", a->s2);
+  printf("s3=0x%08x\n", a->s3);
+  printf("s4=0x%08x\n", a->s4);
+  printf("s5=0x%08x\n", a->s5);
+  printf("s6=0x%08x\n", a->s6);
+  printf("s7=0x%08x\n", a->s7);
+  printf("s8=0x%08x\n", a->s8);
+  printf("s9=0x%08x\n", a->s9);
+  printf("s10=0x%08x\n", a->s10);
+  printf("s11=0x%08x\n", a->s11);
 }
 
 void int0_handler() {
@@ -191,14 +209,9 @@ void int0_handler() {
   case 2:
     handler_error("Illegal instruction");
     break;
-  case 5: {
-    uint32_t saved;
-    read_csr(mscratch, saved);
-    volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
+  case 5:
     handler_error("Load access fault");
-    dump_regs(saved_regs);
-    for (;;);
-  }
+    break;
   case 7:
     handler_error("Store/AMO access fault");
     break;
@@ -206,6 +219,13 @@ void int0_handler() {
     handler_error("Unrecognized mcause");
     break;
   }
+
+  // diagnostics
+  uint32_t saved;
+  read_csr(mscratch, saved);
+  volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
+  dump_regs(saved_regs);
+  for (;;);
 
   MMIO_WRITE(HWSCHED_ERROR, mcause);
   MMIO_READ(HWSCHED_DOORBELL);

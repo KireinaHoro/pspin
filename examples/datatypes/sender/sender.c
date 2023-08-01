@@ -23,7 +23,7 @@
 #include "mpitypes.h"
 #include "mpitypes_dataloop.h"
 
-#include "../handlers/datatype_descr.h"
+#include "../handlers/include/datatype_descr.h"
 #include "../typebuilder/ddt_io_write.h"
 #include "../typebuilder/ddtparser/ddtparser.h"
 
@@ -146,6 +146,7 @@ void update_userbuf_local(buffers_t *bufs, type_info_t *info,
 
 int main(int argc, char *argv[]) {
   int ret = EXIT_FAILURE;
+  srand(time(NULL));
 
   struct sigaction sa = {
       .sa_handler = sigint_handler,
@@ -296,7 +297,7 @@ int main(int argc, char *argv[]) {
 
       // no flow control for now
       for (int i = 0; i < rts.num_parallel_msgs; ++i) {
-        ret = slmp_sendmsg(&sock, from.sin_addr.s_addr, i, bufs.streambuf,
+        ret = slmp_sendmsg(&sock, from.sin_addr.s_addr, rand(), bufs.streambuf,
                            bufs.streambuf_size, 0);
       }
 

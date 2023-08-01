@@ -21,12 +21,14 @@ SRC_FILES=$(PSPIN_RT)/runtime/src/hpu.c $(PSPIN_RT)/runtime/src/mtvec.S ${SPIN_A
 runtime-debug:
 	mkdir -p build/
 	$(CC) $(CFLAGS) -DLANGUAGE_ASSEMBLY $(INCLUDE_FILES) -c $(PULP_SDK)/kernel/riscv/rt/crt0.S -o build/crt0.o
-	$(CC) $(CFLAGS) ${SPIN_CFLAGS} $(PULP_INC) $(INCLUDE_FILES) $(PULP_SRCS) $(SRC_FILES) build/crt0.o -o $(TARGET_BIN) $(LDFLAGS)
+	$(CC) $(CFLAGS) -c $(PULP_SDK)/runtime/libs/errno.c  -o build/errno.o
+	$(CC) $(CFLAGS) ${SPIN_CFLAGS} $(PULP_INC) $(INCLUDE_FILES) $(PULP_SRCS) $(SRC_FILES) build/crt0.o -o $(TARGET_BIN) $(LDFLAGS) errno.o
 
 runtime:
 	mkdir -p build/
 	$(CC) $(CFLAGS) -DLANGUAGE_ASSEMBLY -O3 -flto $(INCLUDE_FILES) -c $(PULP_SDK)/kernel/riscv/rt/crt0.S -o build/crt0.o
-	$(CC) $(CFLAGS) ${SPIN_CFLAGS} $(PULP_INC) $(INCLUDE_FILES) $(PULP_SRCS) $(SRC_FILES) build/crt0.o -o $(TARGET_BIN) $(LDFLAGS)
+	$(CC) $(CFLAGS) -c $(PULP_SDK)/runtime/libs/errno.c  -o build/errno.o
+	$(CC) $(CFLAGS) ${SPIN_CFLAGS} $(PULP_INC) $(INCLUDE_FILES) $(PULP_SRCS) $(SRC_FILES) build/crt0.o -o $(TARGET_BIN) $(LDFLAGS) errno.o
 
 deploy::
 	$(MAKE) runtime

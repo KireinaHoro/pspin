@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <mpitypes.h>
-#include "../handlers/datatype_descr.h"
+#include "../handlers/include/datatype_descr.h"
 
 #ifdef __cplusplus
 extern "C" {

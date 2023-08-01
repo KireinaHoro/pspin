@@ -1,3 +1,9 @@
 [submodule "examples/datatypes/liblsb"]
 	path = examples/datatypes/liblsb
 	url = https://github.com/spcl/liblsb
+[submodule "examples/datatypes/handlers/uthash"]
+	path = examples/datatypes/handlers/uthash
+	url = https://github.com/troydhanson/uthash
+[submodule "examples/datatypes/handlers/umm_malloc"]
+	path = examples/datatypes/handlers/umm_malloc
+	url = https://github.com/rhempel/umm_malloc/

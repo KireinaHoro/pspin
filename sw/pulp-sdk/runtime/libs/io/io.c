@@ -25,9 +25,6 @@
 #include <stdint.h>
 #include "util.h"
 
-static int errno;
-int *__errno() { return &errno; } 
-
 int strcmp(const char *s1, const char *s2)
 {
   while (*s1 != '\0' && *s1 == *s2)

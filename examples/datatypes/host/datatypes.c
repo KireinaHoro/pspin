@@ -21,8 +21,8 @@
 #include "../mpitypes/install/include/mpitypes_dataloop.h"
 #include "../typebuilder/ddt_io_read.h"
 
-#include "../handlers/datatype_descr.h"
-#include "../handlers/datatypes.h"
+#include "../handlers/include/datatype_descr.h"
+#include "../handlers/include/datatypes.h"
 
 #include "../include/datatypes_host.h"
 
@@ -151,7 +151,7 @@ typedef struct {
   int file_id;
   struct arguments args;
   uint32_t userbuf_size;
-  int num_received; // received number of messages so far
+  int num_received; // received but unclaimed (from parallel messages)
 
   int num_elements; // number of datatype elements, from DDT bin
 
@@ -295,9 +295,8 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
       (spin_core_state_t *)(nic_ddt_pos + datatype_mem_size);
 
   for (int i = 0; i < NUM_HPUS; ++i) {
-    // TODO: HPU-local: each HPU has its own copy of the segment
+    // segment replicated onto each core
     nic_buffer_state[i].state = nic_buffer_dt->seg;
-
     nic_buffer_state[i].params = nic_buffer_dt->params;
   }
 
@@ -312,6 +311,9 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
     perror("open rts socket");
     return -1;
   }
+
+  // wait for init to finish (zeroing heap)
+  sleep(3);
 
   return 0;
 }
@@ -334,11 +336,23 @@ typedef void (*msg_handler_t)(fpspin_ctx_t *, uint8_t *);
 // query all cores one round to poll for an incoming message
 static bool query_once(fpspin_ctx_t *ctx, msg_handler_t func) {
   datatypes_data_t *app_data = to_data_ptr(ctx);
+  int num_req = app_data->args.num_parallel_msgs;
+
+  if (app_data->num_received >= num_req) {
+    app_data->num_received -= num_req;
+    return true;
+  }
 
   for (int i = 0; i < NUM_HPUS; ++i) {
     fpspin_flag_t flag_to_host;
     if (!fpspin_pop_req(ctx, i, &flag_to_host))
       continue;
+
+    // repurposed len for msgid report
+    int msgid = flag_to_host.len;
+    printf("Received message #%u id=%u hpu=%d\n", msgid, flag_to_host.dma_id,
+           flag_to_host.hpu_id);
+
     ++app_data->num_received;
 
     // got finished datatype from PsPIN
@@ -357,7 +371,7 @@ static bool query_once(fpspin_ctx_t *ctx, msg_handler_t func) {
     fpspin_push_resp(ctx, i, flag_from_host);
   }
 
-  return app_data->num_received == app_data->args.num_parallel_msgs;
+  return false;
 }
 
 static inline double randlf(double fmin, double fmax) {
@@ -421,8 +435,6 @@ void send_rts(fpspin_ctx_t *ctx) {
          rts.elem_count, rts.num_parallel_msgs);
 }
 
-// dim: dimension of dgemm
-// num_iters: number of iterations
 // return value: -1 if dgemm too long, 1 if too short; 0 if right on time
 int run_trial(fpspin_ctx_t *ctx) {
   datatypes_data_t *app_data = to_data_ptr(ctx);
@@ -443,15 +455,19 @@ int run_trial(fpspin_ctx_t *ctx) {
     if (query_once(ctx, NULL)) {
       if (i == args->num_iterations - 1) {
         // right on time
+        printf("Right on time!\n");
         ret = 0;
         goto finish;
       } else {
         // dgemm too long / datatypes too fast
+        printf("Dgemm too long!\n");
         ret = -1;
         goto finish;
       }
     }
   }
+
+  printf("Dgemm too short!\n");
 
   // too slow - fetch the message and return
   while (!query_once(ctx, NULL))
@@ -523,6 +539,7 @@ int main(int argc, char *argv[]) {
     int dim = args->tune_dim_start;
     int hit = 0;
     while (hit < args->tune_num_hits) {
+      printf("Running trial dim=%d...\n", dim);
       setup_trial(&ctx, dim);
       int res = run_trial(&ctx);
       if (!res) {
@@ -538,12 +555,15 @@ int main(int argc, char *argv[]) {
         }
         hit = 0;
       }
+      app_data->dgemm_total = 0;
     }
 
     // run trial
     printf("\n==> Tuned trial run:\n");
     setup_trial(&ctx, dim);
     run_trial(&ctx);
+
+    // TODO: write measurements to CSV
   }
 
   // get telemetry from pspin
@@ -557,8 +577,6 @@ int main(int argc, char *argv[]) {
          (float)msg_counter.sum / msg_counter.count, msg_counter.count);
 
   finish_datatypes_spin(&ctx);
-
-  // TODO: write measurements to CSV
 
   return EXIT_SUCCESS;
 
