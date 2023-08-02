@@ -36,6 +36,8 @@ struct arguments {
   const char *out_file;
   // benchmark mode
   int num_iterations;
+  int num_misses;
+  double dgemm_margin;
   int num_trials;
   int num_parallel_msgs;
   in_addr_t rts_server;
@@ -68,7 +70,6 @@ static struct argp_option options[] = {
     {"output", 'o', "FILE", 0,
      "output file (userbuf dump in verification mode, performance data CSV in "
      "benchmark mode)"},
-    {"elements", 'e', "NUM", 0, "number of elements in one datatype message"},
     {"rts-server", 'q', "IP4", 0, "IP address to send RTS to sender"},
     {"rts-port", 'r', "PORT", 0, "UDP port to send RTS to sender"},
 
@@ -78,6 +79,9 @@ static struct argp_option options[] = {
     {0, 0, 0, 0, "Benchmark options:"},
     {"iterations", 'i', "NUM", 0,
      "number of dgemm-poll iterations in one trial"},
+    {"misses", 'm', "NUM", 0, "number of misses allowed for a right match"},
+    {"dgemm-err-margin", 'g', "FLOAT", 0,
+     "margin of dgemm validation (default 0.6)"},
     {"trials", 't', "NUM", 0,
      "number of trials in the measurement after tuning"},
     {"parallel-msgs", 'p', "NUM", 0,
@@ -107,6 +111,12 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     break;
   case 'i':
     args->num_iterations = atoi(arg);
+    break;
+  case 'm':
+    args->num_misses = atoi(arg);
+    break;
+  case 'g':
+    args->dgemm_margin = atof(arg);
     break;
   case 't':
     args->num_trials = atoi(arg);
@@ -152,7 +162,6 @@ typedef struct {
   struct arguments args;
   uint32_t userbuf_size;
   int num_received; // received but unclaimed (from parallel messages)
-
   int num_elements; // number of datatype elements, from DDT bin
 
   int dim; // dimension of dgemm matrices - current trial
@@ -182,6 +191,8 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
       .dest_ctx = 0,
       .mode = MODE_BENCHMARK,
       .num_iterations = 100,
+      .num_misses = 5,
+      .dgemm_margin = 0.6,
       .num_trials = 10,
       .num_parallel_msgs = 1,
       .rts_port = RTS_PORT,
@@ -385,6 +396,18 @@ static inline double curtime() {
   return now.tv_sec + now.tv_nsec * 1e-9;
 }
 
+void init_matrices(double **A, double **B, double **C, int dim) {
+  long sz = dim * dim;
+  *A = malloc(sizeof(double) * sz);
+  *B = malloc(sizeof(double) * sz);
+  *C = malloc(sizeof(double) * sz);
+
+  // random initialise matrices
+  for (int i = 0; i < sz; ++i) {
+    (*A)[i] = (*B)[i] = (*C)[i] = randlf(-100.0, 100.0);
+  }
+}
+
 void setup_trial(fpspin_ctx_t *ctx, int dim) {
   datatypes_data_t *app_data = to_data_ptr(ctx);
 
@@ -397,15 +420,7 @@ void setup_trial(fpspin_ctx_t *ctx, int dim) {
   if (app_data->C)
     free(app_data->C);
 
-  long sz = dim * dim;
-  app_data->A = malloc(sizeof(double) * sz);
-  app_data->B = malloc(sizeof(double) * sz);
-  app_data->C = malloc(sizeof(double) * sz);
-
-  // random initialise matrices
-  for (int i = 0; i < sz; ++i) {
-    app_data->A[i] = app_data->B[i] = app_data->C[i] = randlf(-100.0, 100.0);
-  }
+  init_matrices(&app_data->A, &app_data->B, &app_data->C, dim);
 }
 
 void send_rts(fpspin_ctx_t *ctx) {
@@ -453,14 +468,14 @@ int run_trial(fpspin_ctx_t *ctx) {
     app_data->dgemm_total += curtime() - cpu_start;
 
     if (query_once(ctx, NULL)) {
-      if (i == args->num_iterations - 1) {
-        // right on time
-        printf("Right on time!\n");
+      if (i >= args->num_iterations - 1 - args->num_misses) {
+        // within the miss requirement
+        printf("On time (i=%d)!\n", i);
         ret = 0;
         goto finish;
       } else {
         // dgemm too long / datatypes too fast
-        printf("Dgemm too long!\n");
+        printf("Dgemm too long! i=%d\n", i);
         ret = -1;
         goto finish;
       }
@@ -481,6 +496,46 @@ finish:
 
   printf("DGEMM total: %lf; RTT: %lf\n", app_data->dgemm_total, app_data->rtt);
   return ret;
+}
+
+bool check_dgemm(struct arguments *args) {
+  const long dim = 2000;
+  const int iters = 50;
+  double flops = 2 * dim * dim * dim;
+  printf("Checking DGEMM speed with dim=%ld...\n", dim);
+
+  double *A, *B, *C;
+  init_matrices(&A, &B, &C, dim);
+
+  // fpga1: Ryzen 7 2700 (Zen+), AVX2 VFMADD132PD (2*4 FLOP)
+  //        reciprocal latency=1
+  //        typical frequency 3.4 GHz, 8 cores
+  double theo_gflops = 3.4 * 2 * 4 * 8;
+  double start = curtime();
+
+  for (int i = 0; i < iters; ++i)
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, dim, dim, dim, 1.0,
+                A, dim, B, dim, 2, C, dim);
+
+  double elapsed = (curtime() - start) / iters;
+  double real_gflops = flops / elapsed / 1e9;
+
+  printf("Theoretical double GFLOPS: %lf; measured double GFLOPS: %lf\n",
+         theo_gflops, real_gflops);
+
+  bool pass = true;
+  if (real_gflops / theo_gflops >= args->dgemm_margin) {
+    printf("PASS margin requirement %lf\n", args->dgemm_margin);
+  } else {
+    printf("FAIL margin requirement %lf\n", args->dgemm_margin);
+    pass = false;
+  }
+
+  free(A);
+  free(B);
+  free(C);
+
+  return pass;
 }
 
 volatile sig_atomic_t exit_flag = 0;
@@ -535,6 +590,11 @@ int main(int argc, char *argv[]) {
       }
     }
   } else {
+    // check dgemm intensity
+    if (!check_dgemm(args)) {
+      goto fail;
+    }
+
     // tune dgemm size
     int dim = args->tune_dim_start;
     int hit = 0;
