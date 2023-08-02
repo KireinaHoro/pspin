@@ -29,8 +29,23 @@
 #define SIZE_MSG (128 * 1024 * 1024) // 128 MB
 #define MSG_PAGES (SIZE_MSG / PAGE_SIZE)
 
-#if 1
-#define DEBUG(...) printf(__VA_ARGS__)
+// #define USE_SPIN_SPINLOCK
+
+#ifdef DATATYPES_DEBUG
+#ifdef USE_SPIN_SPINLOCK
+spin_lock_t print_spinlock;
+#define DEBUG(...)                                                             \
+  do {                                                                         \
+    spin_lock_lock(&print_spinlock);                                           \
+    printf(__VA_ARGS__);                                                       \
+    spin_lock_unlock(&print_spinlock);                                         \
+  } while (0)
+#else
+#define DEBUG(...)                                                             \
+  do {                                                                         \
+    printf(__VA_ARGS__);                                                       \
+  } while (0)
+#endif
 #else
 #define DEBUG(...)
 #endif
@@ -118,21 +133,25 @@ __handler__ void datatypes_hh(handler_args_t *args) {
 #else
   spin_lock_lock(&spinlock);
 #endif
+#ifdef DATATYPES_DEBUG
   INTEGRITY_CHECK();
+#endif
 
   spin_msg_state_t *my_state = umm_malloc(sizeof(spin_msg_state_t));
   my_state->msgid = msgid;
   HASH_ADD_INT(msg_states, msgid, my_state);
 
+#ifdef DATATYPES_DEBUG
   INTEGRITY_CHECK();
   POISON_CHECK();
+#endif
 #ifndef USE_SPIN_SPINLOCK
   unlock();
 #else
   spin_lock_unlock(&spinlock);
 #endif
 
-  printf("Allocated message state @ %p\n", my_state);
+  DEBUG("Allocated message state @ %p\n", my_state);
 
   my_state->seg = dtmem->state[coreid].state;
   my_state->params = (struct MPIT_m2m_params){
@@ -185,8 +204,10 @@ __handler__ void datatypes_th(handler_args_t *args) {
   // FIXME: need bitmap to handle out-of-order free
   umm_free(my_state);
 
-  umm_integrity_check();
-  umm_poison_check();
+#ifdef DATATYPES_DEBUG
+  INTEGRITY_CHECK();
+  POISON_CHECK();
+#endif
 
 #ifndef USE_SPIN_SPINLOCK
   unlock();
@@ -237,7 +258,7 @@ __handler__ void datatypes_ph(handler_args_t *args) {
     for (;;)
       ;
   }
-  printf("my_state=%p &mpit_segment=%p\n", my_state, &my_state->seg);
+  DEBUG("my_state=%p &mpit_segment=%p\n", my_state, &my_state->seg);
 
   my_state->params.streambuf = (void *)slmp_pld;
   // first CORE_COUNT pages are for the req/resp interface
@@ -276,6 +297,7 @@ void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
 
 #ifdef USE_SPIN_SPINLOCK
   spin_lock_init(&spinlock);
+  spin_lock_init(&print_spinlock);
 #else
   amo_store(&lock_owner, 0);
 #endif
