@@ -30,8 +30,10 @@
 
 #define EC_MAX_NUM 2
 
-#define NIC_L2_ADDR 0x1c300000
-#define NIC_L2_SIZE (1024 * 1024)
+// defined in linker.ld
+// FIXME: use same logic in loader.c in libfpspin to avoid automatic data
+#define NIC_L2_ADDR 0x1c0c0000
+#define NIC_L2_SIZE 0x40000
 #define NIC_L2_EC_CHUNK_SIZE (NIC_L2_SIZE / EC_MAX_NUM)
 
 #define HOST_ADDR 0xdeadbeefdeadbeef
