@@ -204,7 +204,7 @@ namespace PsPIN
 
             bool can_accept_cmd = packetizer.has_free_cmd_slot();
 
-            if (*no_cmd.no_cmd_req_valid_i && can_accept_cmd)
+            if (*no_cmd.no_cmd_req_valid_i == 1 && can_accept_cmd)
             {
 
                 NICCommand cmd; 

@@ -342,7 +342,7 @@ namespace PsPIN
         {
             //AW_READY can be function of AW_VALID, so let's see if we have it set already
             aw_wait = false;
-            if (*port.aw_valid && !(*port.aw_ready))
+            if (*port.aw_valid == 1 && !(*port.aw_ready == 1))
             {
                 aw_wait = true;
             }
@@ -385,7 +385,7 @@ namespace PsPIN
         {
             //AR_READY can be function of AR_VALID, so let's see if we have it set already
             ar_wait = false;
-            if (*port.ar_valid && !(*port.ar_ready))
+            if (*port.ar_valid == 1 && !(*port.ar_ready == 1))
             {
                 ar_wait = true;
             }
@@ -424,7 +424,7 @@ namespace PsPIN
         {
             //AW_READY can be function of AW_VALID, so let's see if we have it set already
             w_wait = false;
-            if (*port.w_valid && !(*port.w_ready))
+            if (*port.w_valid == 1 && !(*port.w_ready == 1))
             {
                 w_wait = true;
             }
@@ -434,7 +434,7 @@ namespace PsPIN
         {
             bool can_accept_b = b_beats_buffer_size == 0 || b_queue.size() < b_beats_buffer_size;
 
-            if (*port.b_valid && can_accept_b)
+            if (*port.b_valid == 1 && can_accept_b)
             {
                 assert(!write_queue.empty());
                 axi_b_queue_entry_t &entry = write_queue.front();
@@ -460,7 +460,7 @@ namespace PsPIN
         {
             bool can_accept_r = r_beats_buffer_size == 0 || r_queue.size() < r_beats_buffer_size;
 
-            if (*port.r_valid && can_accept_r)
+            if (*port.r_valid == 1 && can_accept_r)
             {
                 assert(!read_queue.empty());
                 axi_r_queue_entry_t &entry = read_queue.front();

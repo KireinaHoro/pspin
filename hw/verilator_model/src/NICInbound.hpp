@@ -388,7 +388,7 @@ namespace PsPIN
         {
 	    *ni_ctrl.her_valid_o = 0;
 
-	    if (!(*ni_ctrl.her_ready_i))
+	    if (!(*ni_ctrl.her_ready_i == 1))
 	    {
                 ni_ctrl_stalls++;
                 return;
