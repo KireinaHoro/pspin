@@ -81,6 +81,9 @@ typedef struct gdriver_sim_descr
     int num_ectxs;
     gdriver_ectx_t ectxs[EC_MAX_NUM];
 
+    int is_interactive;
+    interactive_feedback_fun_t interactive_cb;
+
     int is_trace;
     gdriver_ttrace_t ttrace;
     gdriver_tgen_t tgen;
@@ -231,6 +234,9 @@ static void gdriver_feedback(uint64_t user_ptr, uint64_t nic_arrival_time,
     uint64_t pspin_arrival_time, uint64_t feedback_time)
 {
     sim_state.packets_processed++;
+    if (sim_state.interactive_cb) {
+        sim_state.interactive_cb(user_ptr, nic_arrival_time, pspin_arrival_time, feedback_time);
+    }
 }
 
 // fill-in and get the memory addresses of the current (being configured) ectx
@@ -317,6 +323,10 @@ spin_ec_t *gdriver_get_ectx_mems() {
     return &sim_state.ectxs[sim_state.num_ectxs].ectx;
 }
 
+void gdriver_set_interactive_cb(interactive_feedback_fun_t cb) {
+    sim_state.interactive_cb = cb;
+}
+
 int gdriver_add_ectx(const char *hfile, const char *hh, const char *ph, const char *th,
      fill_packet_fun_t fill_pkt_cb, void *l2_img, size_t l2_img_size,
      void *matching_ctx, size_t matching_ctx_size)
@@ -344,11 +354,14 @@ int gdriver_add_ectx(const char *hfile, const char *hh, const char *ph, const ch
 
 int gdriver_run()
 {
-    if (sim_state.is_trace) {
-        gdriver_parse_trace();
-    } else {
-        gdriver_generate_packets();
+    if (!sim_state.is_interactive) {
+        if (sim_state.is_trace) {
+            gdriver_parse_trace();
+        } else {
+            gdriver_generate_packets();
+        }
     }
+    // interactive mode: register for initial packets yourself
 
     if (pspinsim_run() == SPIN_SUCCESS) {
         return GDRIVER_OK;
@@ -371,6 +384,10 @@ int gdriver_fini()
     return GDRIVER_OK;
 }
 
+bool gdriver_is_interactive() {
+    return sim_state.is_interactive;
+}
+
 int gdriver_init(int argc, char **argv, match_packet_fun_t matching_cb, int *ectx_num)
 {
     struct gengetopt_args_info ai;
@@ -391,16 +408,20 @@ int gdriver_init(int argc, char **argv, match_packet_fun_t matching_cb, int *ect
 
     memset(&sim_state, 0, sizeof(sim_state));
 
-    if (strcmp(ai.trace_file_arg, MAGIC_PATH)) {
-        sim_state.is_trace = 1;
-        sim_state.ttrace.trace_path = ai.trace_file_arg;
-        sim_state.ttrace.matching_cb = matching_cb;
+    if (ai.interactive_given) {
+        sim_state.is_interactive = 1;
     } else {
-        sim_state.tgen.num_messages = ai.num_messages_arg;
-        sim_state.tgen.num_packets = ai.num_packets_arg;
-        sim_state.tgen.packet_size = ai.packet_size_arg;
-        sim_state.tgen.packet_delay = ai.packet_delay_arg;
-        sim_state.tgen.message_delay = ai.message_delay_arg;
+        if (strcmp(ai.trace_file_arg, MAGIC_PATH)) {
+            sim_state.is_trace = 1;
+            sim_state.ttrace.trace_path = ai.trace_file_arg;
+            sim_state.ttrace.matching_cb = matching_cb;
+        } else {
+            sim_state.tgen.num_messages = ai.num_messages_arg;
+            sim_state.tgen.num_packets = ai.num_packets_arg;
+            sim_state.tgen.packet_size = ai.packet_size_arg;
+            sim_state.tgen.packet_delay = ai.packet_delay_arg;
+            sim_state.tgen.message_delay = ai.message_delay_arg;
+        }
     }
 
     *ectx_num = EC_MAX_NUM;

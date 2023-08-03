@@ -194,6 +194,7 @@ SV_SRCS=../deps/axi/src/axi_pkg.sv \
         ../deps/icache_mp_128_pf/RTL/prefetcher_if.sv \
         ../deps/icache_mp_128_pf/RTL/icache_top_mp_128_PF.sv \
         ../deps/axi/src/axi_cut.sv \
+        ../deps/axi/src/axi_multicut.sv \
         ../deps/axi_slice_dc/src/dc_token_ring.v \
         ../deps/axi_slice_dc/src/dc_synchronizer.v \
         ../deps/axi_slice_dc/src/dc_token_ring_fifo_dout.v \

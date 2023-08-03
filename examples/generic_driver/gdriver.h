@@ -21,10 +21,13 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "spin.h"
 
 typedef uint32_t (*fill_packet_fun_t)(uint32_t, uint32_t, uint8_t*, uint32_t, uint32_t*);
+// *msg_idx, *is_eom -> len
+typedef void (*interactive_feedback_fun_t)(uint64_t, uint64_t, uint64_t, uint64_t);
 typedef int (*match_packet_fun_t)(char*, char*);
 
 int gdriver_add_ectx(const char *hfile, const char *hh, const char *ph, const char *th,
@@ -34,3 +37,6 @@ spin_ec_t *gdriver_get_ectx_mems();
 int gdriver_run();
 int gdriver_fini();
 int gdriver_init(int argc, char **argv, match_packet_fun_t matching_cb, int *ectx_num);
+
+bool gdriver_is_interactive();
+void gdriver_set_interactive_cb(interactive_feedback_fun_t cb);

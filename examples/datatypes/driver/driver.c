@@ -14,43 +14,100 @@
 #include <string.h>
 
 #include "gdriver.h"
+#include "pspinsim.h"
 
 #include "../include/datatypes_host.h"
+
+#define NUM_MSGS 16 // maximum
 
 typedef struct {
   uint8_t *p;
   size_t len;
+  bool is_eom;
 } packet_descr_t;
 
-packet_descr_t *packets = NULL;
-int num_ptrs = 0;
-int cur_idx = 0;
-int tot_pkts = 0;
+typedef struct {
+  packet_descr_t *packets;
+  int num_ptrs;
+  int cur_idx;
+  bool present;
+} msg_descr_t;
+msg_descr_t msgs[NUM_MSGS];
+int tot_msgs = 0;
 
 // copy
 void packet_handler(u_char *user_data, const struct pcap_pkthdr *pkthdr,
                     const u_char *packet) {
-  if (cur_idx == num_ptrs) {
+  // only send outgoing slmp packets
+  const slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)packet;
+  if (ntohs(hdrs->eth_hdr.length) != ETHERTYPE_IP)
+    return;
+  if (hdrs->ip_hdr.protocol != IPPROTO_UDP)
+    return;
+  if (ntohs(hdrs->udp_hdr.dst_port) != SLMP_PORT)
+    return;
+
+  uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
+  printf("Got SLMP packet: msgid=%d off=%d flags=%#x tot_len=%d\n",
+         ntohl(hdrs->slmp_hdr.msg_id), ntohl(hdrs->slmp_hdr.pkt_off), flags,
+         pkthdr->len);
+
+  int msgid = ntohl(hdrs->slmp_hdr.msg_id) & 0xff;
+  msgs[msgid].present = true;
+
+  if (msgs[msgid].cur_idx == msgs[msgid].num_ptrs) {
     // need more pointer space
-    num_ptrs *= 2;
-    packets = realloc(packets, num_ptrs * sizeof(packet_descr_t));
+    msgs[msgid].num_ptrs *= 2;
+    msgs[msgid].packets = realloc(
+        msgs[msgid].packets, msgs[msgid].num_ptrs * sizeof(packet_descr_t));
   }
-  packet_descr_t *descr = &packets[cur_idx++];
+  packet_descr_t *descr = &msgs[msgid].packets[msgs[msgid].cur_idx++];
   uint8_t *pkt_buf = descr->p = malloc(pkthdr->len);
   descr->len = pkthdr->len;
+  descr->is_eom = flags & 0x8000; // EOM bit in SLMP
   memcpy(pkt_buf, packet, pkthdr->len);
 }
 
-uint32_t fill_packet(uint32_t msg_idx, uint32_t pkt_idx, uint8_t *pkt_buff,
-                     uint32_t max_pkt_size, uint32_t *l1_pkt_size) {
-  printf("Filling msg_idx=%d pkt_idx=%d cur_idx=%d\n", msg_idx, pkt_idx,
-         cur_idx);
+typedef struct {
+  spin_ec_t *ec;
+  int msgid;
+  int pktidx;
+} feedback_args_t;
 
-  packet_descr_t *pkt = &packets[cur_idx];
-  memcpy(pkt_buff, pkt->p, pkt->len);
+void interactive_cb(uint64_t user_ptr, uint64_t nic_arrival_time,
+                    uint64_t pspin_arrival_time, uint64_t feedback_time) {
+  feedback_args_t *fb_args = (feedback_args_t *)user_ptr;
+  msg_descr_t *msg = &msgs[fb_args->msgid];
 
-  ++cur_idx;
-  return pkt->len;
+  printf("Finished packet #%d of message #%d\n", fb_args->pktidx,
+         fb_args->msgid);
+
+  int next_idx = ++fb_args->pktidx;
+  if (next_idx == msg->cur_idx) {
+    printf("Finished message #%d\n", fb_args->msgid);
+    msg->present = false;
+
+    bool remaining = false;
+    for (int i = 0; i < NUM_MSGS; ++i) {
+      if (msgs[i].present) {
+        remaining = true;
+        break;
+      }
+    }
+    if (!remaining) {
+      pspinsim_packet_eos();
+    }
+
+    goto fini;
+  }
+
+  // send rest of message
+  packet_descr_t *pkt = &msg->packets[next_idx];
+  pspinsim_packet_add(fb_args->ec, fb_args->msgid, pkt->p, pkt->len, pkt->len,
+                      pkt->is_eom, 0, user_ptr);
+
+fini:
+  free(fb_args);
 }
 
 int main(int argc, char *argv[]) {
@@ -62,9 +119,16 @@ int main(int argc, char *argv[]) {
   int ret = 0;
   int ectx_num;
   gdriver_init(argc, argv, NULL, &ectx_num);
+  if (!gdriver_is_interactive()) {
+    fprintf(stderr, "datatypes host only supports interactive mode\n");
+    return EXIT_FAILURE;
+  }
 
   // initial placeholder of pointers
-  packets = calloc(num_ptrs, sizeof(packet_descr_t));
+  for (int i = 0; i < NUM_MSGS; ++i) {
+    msgs[i].num_ptrs = 1;
+    msgs[i].packets = calloc(msgs[i].num_ptrs, sizeof(packet_descr_t));
+  }
 
   // get packet pcap
   const char *pcap_file = getenv("DDT_PCAP");
@@ -96,9 +160,6 @@ int main(int argc, char *argv[]) {
     ret = EXIT_FAILURE;
     goto fail;
   }
-  printf("Read %d packets\n", cur_idx);
-  tot_pkts = cur_idx;
-  cur_idx = 0;
 
   // load dataloops L2 image
   spin_ec_t *ec = gdriver_get_ectx_mems();
@@ -113,9 +174,29 @@ int main(int argc, char *argv[]) {
       prepare_ddt_nicmem(ddt_file, handler_mem, &l2_image, &l2_image_size,
                          &num_elements, &userbuf_size);
 
-  // launch ectx and run
-  gdriver_add_ectx(handlers_file, hh, ph, th, fill_packet, l2_image,
-                   l2_image_size, NULL, 0);
+  // install ectx
+  gdriver_add_ectx(handlers_file, hh, ph, th, NULL, l2_image, l2_image_size,
+                   NULL, 0);
+
+  // send head of messages
+  for (int i = 0; i < NUM_MSGS; ++i) {
+    if (!msgs[i].present)
+      continue;
+    packet_descr_t *pkt = &msgs[i].packets[0];
+
+    // msgid as user_ptr
+    feedback_args_t *arg = malloc(sizeof(feedback_args_t));
+    arg->msgid = i;
+    arg->pktidx = 0;
+    arg->ec = ec;
+    pspinsim_packet_add(ec, i, pkt->p, pkt->len, pkt->len, pkt->is_eom, 0,
+                        (uint64_t)arg);
+  }
+
+  // set interactive callback
+  pspinsim_cb_set_pkt_feedback(interactive_cb);
+
+  // start simulation
   gdriver_run();
 
   free(l2_image);

@@ -460,7 +460,7 @@ namespace PsPIN
         // Get feedback
         void feedback_progress()
         {
-            if (*ni_ctrl.feedback_ready_o && *ni_ctrl.feedback_valid_i)
+            if (*ni_ctrl.feedback_ready_o == 1 && *ni_ctrl.feedback_valid_i == 1)
             {
                 assert(pktmap.find(*ni_ctrl.feedback_her_addr_i) != pktmap.end());
                 pktentry_t pktentry = pktmap[*ni_ctrl.feedback_her_addr_i];
