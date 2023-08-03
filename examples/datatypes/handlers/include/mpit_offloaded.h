@@ -86,6 +86,7 @@ static inline void DLOOP_Stackelm_load(struct DLOOP_Dataloop_stackelm *elmp,
 #define DLOOP_SEGMENT_PUSH                  \
 	{                                       \
 		cur_sp++;                           \
+		DDTASSERT(cur_sp < DLOOP_MAX_DATATYPE_DEPTH); \
 		cur_elmp = &segp->stackelm[cur_sp]; \
 	}
 
@@ -1160,6 +1161,7 @@ static inline void DLOOP_Stackelm_load(struct DLOOP_Dataloop_stackelm *elmp,
 									   int branch_flag)
 {
 	elmp->loop_p = dlp;
+	printf("Stored loop_p=%p elmp=%p\n", elmp->loop_p, elmp);
 
 	if ((dlp->kind & DLOOP_KIND_MASK) == DLOOP_KIND_CONTIG)
 	{

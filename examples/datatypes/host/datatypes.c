@@ -323,9 +323,6 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
     return -1;
   }
 
-  // wait for init to finish (zeroing heap)
-  sleep(3);
-
   return 0;
 }
 

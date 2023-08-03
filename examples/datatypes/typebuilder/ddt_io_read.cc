@@ -43,6 +43,7 @@ void remap_spin_datatype(void * mem, size_t size, uint64_t base_ptr, bool is_rem
         //substitute with the "virtual" one
         dataloop->el_type = (MPI_Datatype) (uint64_t) DDTREBASE_CHECK(base_ptr, dataloop->el_type);
         segp->stackelm[i].loop_p = (DLOOP_Dataloop *) DDTREBASE_CHECK(base_ptr, segp->stackelm[i].loop_p);
+        printf("Remapped loop_p=%p\n", segp->stackelm[i].loop_p);
 
         switch (dataloop->kind & DLOOP_KIND_MASK)
         {
