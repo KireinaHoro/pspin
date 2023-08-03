@@ -233,6 +233,31 @@ static void gdriver_feedback(uint64_t user_ptr, uint64_t nic_arrival_time,
     sim_state.packets_processed++;
 }
 
+// fill-in and get the memory addresses of the current (being configured) ectx
+static void ectx_set_mems(gdriver_ectx_t *gectx, uint32_t gectx_id) {
+    if (gectx->ectx.handler_mem_addr) {
+        // already initialised earlier by gdriver_get_ectx_mems
+        return;
+    }
+
+    gectx->ectx.handler_mem_addr = EC_MEM_BASE_ADDR(gectx_id,
+        NIC_L2_ADDR, NIC_L2_EC_CHUNK_SIZE);
+    gectx->ectx.handler_mem_size = NIC_L2_EC_CHUNK_SIZE;
+    assert(gectx->ectx.handler_mem_addr < (NIC_L2_ADDR + NIC_L2_SIZE));
+
+    gectx->ectx.host_mem_addr = EC_MEM_BASE_ADDR(gectx_id,
+        HOST_ADDR, HOST_EC_CHUNK_SIZE);
+    gectx->ectx.host_mem_size = HOST_EC_CHUNK_SIZE;
+    assert(gectx->ectx.host_mem_addr < (HOST_ADDR + HOST_SIZE));
+
+    for (int i = 0; i < NUM_CLUSTERS; i++) {
+        gectx->ectx.scratchpad_addr[i] = EC_MEM_BASE_ADDR(gectx_id,
+            SCRATCHPAD_REL_ADDR, SCRATCHPAD_EC_CHUNK_SIZE);
+        gectx->ectx.scratchpad_size[i] = SCRATCHPAD_EC_CHUNK_SIZE;
+        assert(gectx->ectx.scratchpad_addr[i] < (SCRATCHPAD_REL_ADDR + SCRATCHPAD_SIZE));
+    }
+}
+
 static int gdriver_init_ectx(gdriver_ectx_t *gectx, uint32_t gectx_id,
     const char *handlers_exe, const char *hh_name,
     const char *ph_name, const char *th_name,
@@ -267,23 +292,7 @@ static int gdriver_init_ectx(gdriver_ectx_t *gectx, uint32_t gectx_id,
      *
      * See EC_MEM_BASE_ADDR macro definition for clarity.
      */
-
-    gectx->ectx.handler_mem_addr = EC_MEM_BASE_ADDR(gectx_id,
-        NIC_L2_ADDR, NIC_L2_EC_CHUNK_SIZE);
-    gectx->ectx.handler_mem_size = NIC_L2_EC_CHUNK_SIZE;
-    assert(gectx->ectx.handler_mem_addr < (NIC_L2_ADDR + NIC_L2_SIZE));
-
-    gectx->ectx.host_mem_addr = EC_MEM_BASE_ADDR(gectx_id,
-        HOST_ADDR, HOST_EC_CHUNK_SIZE);
-    gectx->ectx.host_mem_size = HOST_EC_CHUNK_SIZE;
-    assert(gectx->ectx.host_mem_addr < (HOST_ADDR + HOST_SIZE));
-
-    for (int i = 0; i < NUM_CLUSTERS; i++) {
-        gectx->ectx.scratchpad_addr[i] = EC_MEM_BASE_ADDR(gectx_id,
-            SCRATCHPAD_REL_ADDR, SCRATCHPAD_EC_CHUNK_SIZE);
-        gectx->ectx.scratchpad_size[i] = SCRATCHPAD_EC_CHUNK_SIZE;
-        assert(gectx->ectx.scratchpad_addr[i] < (SCRATCHPAD_REL_ADDR + SCRATCHPAD_SIZE));
-    }
+    ectx_set_mems(gectx, gectx_id);
 
     gectx->pkt_fill_cb = fill_cb;
 
@@ -299,6 +308,13 @@ static int gdriver_init_ectx(gdriver_ectx_t *gectx, uint32_t gectx_id,
     gdriver_dump_ectx_info(gectx);
 
     return GDRIVER_OK;
+}
+
+// fill in mem addresses earlier and return to user driver to build l2 image 
+// that needs relocation
+spin_ec_t *gdriver_get_ectx_mems() {
+    ectx_set_mems(&(sim_state.ectxs[sim_state.num_ectxs]), sim_state.num_ectxs);
+    return &sim_state.ectxs[sim_state.num_ectxs].ectx;
 }
 
 int gdriver_add_ectx(const char *hfile, const char *hh, const char *ph, const char *th,
