@@ -15,7 +15,7 @@
 #pragma once
 
 // WARNING: this has to match pspin_cfg_pkg.sv !!!
-#define NUM_CLUSTERS 4
+#define NUM_CLUSTERS 2
 #define NUM_CORES 8
 #define C_MSGID_WIDTH 10
 #define PCIE_START_ADDR 0x1000000000000000
