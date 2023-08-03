@@ -4,7 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
-#include "../handlers/datatype_descr.h"
+#include "../handlers/include/datatype_descr.h"
 
 #include "ddt_io_write.h"
 

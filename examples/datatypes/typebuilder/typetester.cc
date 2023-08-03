@@ -7,7 +7,7 @@
 
 extern "C" {
 #include <mpitypes.h>
-#include "../handlers/datatype_descr.h"
+#include "../handlers/include/datatype_descr.h"
 #include "typesize_support.h"
 }
 

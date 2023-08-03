@@ -29,61 +29,29 @@
 #define SIZE_MSG (128 * 1024 * 1024) // 128 MB
 #define MSG_PAGES (SIZE_MSG / PAGE_SIZE)
 
-// #define USE_SPIN_SPINLOCK
+#define DATATYPES_DEBUG
 
 #ifdef DATATYPES_DEBUG
-#ifdef USE_SPIN_SPINLOCK
-spin_lock_t print_spinlock;
-#define DEBUG(...)                                                             \
-  do {                                                                         \
-    spin_lock_lock(&print_spinlock);                                           \
-    printf(__VA_ARGS__);                                                       \
-    spin_lock_unlock(&print_spinlock);                                         \
-  } while (0)
-#else
 #define DEBUG(...)                                                             \
   do {                                                                         \
     printf(__VA_ARGS__);                                                       \
   } while (0)
-#endif
 #else
 #define DEBUG(...)
 #endif
-
-#ifdef USE_SPIN_SPINLOCK
-spin_lock_t spinlock;
-#else
-volatile uint32_t lock_owner;
-static inline void lock(handler_args_t *args) {
-  int res;
-  int counter = 0;
-  do {
-    res = compare_and_swap(&lock_owner, 0, HPU_ID(args) + 1);
-    if (res) {
-      rt_time_wait_cycles(50);
-      ++counter;
-      if (!(counter % 100000)) {
-        printf("Trying to lock...\n");
-        printf("Owner: %d @ %p\n", lock_owner, &lock_owner);
-      }
-    }
-  } while (res);
-}
-static inline void unlock() { amo_store(&lock_owner, 0); }
-
-#endif
-// lock-protected
-static spin_msg_state_t *msg_states = NULL;
 
 // perf counter layout:
 // 0: per-packet cycles
 // 1: per-message cycles
 // TODO: more fine-grained counters?
 
-// FIXME: this would break if we have interleaving messages
-#if 0
-uint32_t msg_start[CORE_COUNT];
-#endif
+// we assume we have at most CORE_COUNT message
+#define NUM_MSGS CORE_COUNT
+// we take the first byte in little endian
+// matching engine will use the last byte to map to an MPQ
+#define MSGID_IDX(hdrs) ((ntohl(hdrs->slmp_hdr.msg_id) % 0xff) % NUM_MSGS)
+
+uint32_t msg_start[NUM_MSGS];
 
 #define SWAP(a, b, type)                                                       \
   do {                                                                         \
@@ -121,45 +89,13 @@ __handler__ void datatypes_hh(handler_args_t *args) {
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
 
-  uint32_t coreid = args->hpu_gid;
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
 
-  int msgid = hdrs->slmp_hdr.msg_id;
-  DEBUG("Start of message #%u (flow_id %d)\n", msgid, args->task->flow_id);
+  int msgid = MSGID_IDX(hdrs);
+  int flowid = args->task->flow_id;
+  DEBUG("Start of message #%u, flowid %d\n", msgid, flowid);
 
-  // alloc message state
-#ifndef USE_SPIN_SPINLOCK
-  lock(args);
-#else
-  spin_lock_lock(&spinlock);
-#endif
-#ifdef DATATYPES_DEBUG
-  INTEGRITY_CHECK();
-#endif
-
-  spin_msg_state_t *my_state = umm_malloc(sizeof(spin_msg_state_t));
-  my_state->msgid = msgid;
-  HASH_ADD_INT(msg_states, msgid, my_state);
-
-#ifdef DATATYPES_DEBUG
-  INTEGRITY_CHECK();
-  POISON_CHECK();
-#endif
-#ifndef USE_SPIN_SPINLOCK
-  unlock();
-#else
-  spin_lock_unlock(&spinlock);
-#endif
-
-  DEBUG("Allocated message state @ %p\n", my_state);
-
-  my_state->seg = dtmem->state[coreid].state;
-  my_state->params = (struct MPIT_m2m_params){
-      .direction = dtmem->state[coreid].params.direction};
-
-#if 0
-  msg_start[msgid % args->hpu_gid] = cycles();
-#endif
+  msg_start[msgid] = cycles();
 
   if (!SYN(flags)) {
     printf("Error: first packet did not require SYN; flags = %#x\n", flags);
@@ -175,45 +111,16 @@ __handler__ void datatypes_th(handler_args_t *args) {
 
   // counter 1: message average time
   // FIXME: should this include the notification time?
-  int msgid = hdrs->slmp_hdr.msg_id;
-#if 0
-  push_counter(&__host_data.counters[1],
-               cycles() - msg_start[msgid % args->hpu_gid]);
-#endif
+  int msgid = MSGID_IDX(hdrs);
+  int flowid = args->task->flow_id;
+  push_counter(&__host_data.counters[1], cycles() - msg_start[msgid]);
 
-  DEBUG("End of message #%u (flow_id %d)\n", msgid, args->task->flow_id);
+  DEBUG("End of message #%u, flowid %d\n", msgid, flowid);
 
   if (!EOM(flags)) {
     printf("Error: last packet did not have EOM; flags = %#x\n", flags);
     return;
   }
-
-  spin_msg_state_t *my_state;
-  HASH_FIND_INT(msg_states, &msgid, my_state);
-
-#ifndef USE_SPIN_SPINLOCK
-  lock(args);
-#else
-  spin_lock_lock(&spinlock);
-#endif
-  // deallocate message state
-  HASH_DEL(msg_states, my_state);
-
-  INTEGRITY_CHECK();
-
-  // FIXME: need bitmap to handle out-of-order free
-  umm_free(my_state);
-
-#ifdef DATATYPES_DEBUG
-  INTEGRITY_CHECK();
-  POISON_CHECK();
-#endif
-
-#ifndef USE_SPIN_SPINLOCK
-  unlock();
-#else
-  spin_lock_unlock(&spinlock);
-#endif
 
   // notify host for unpacked message -- 0-byte host request
   // FIXME: this is synchronous; do we need an asynchronous interface?
@@ -233,7 +140,6 @@ __handler__ void datatypes_ph(handler_args_t *args) {
 
   task_t *task = args->task;
 
-  uint32_t coreid = args->hpu_gid;
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
 
   slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
@@ -243,38 +149,32 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
 
-  int msgid = hdrs->slmp_hdr.msg_id;
-
-  DEBUG("Packet: offset %d, pld size %d, flow_id %d\n", pkt_off, slmp_pld_len,
-        args->task->flow_id);
+  int msgid = MSGID_IDX(hdrs);
+  int flowid = args->task->flow_id;
+  DEBUG("Packet: offset %d, pld size %d, msgid %d, flowid %d\n", pkt_off,
+        slmp_pld_len, msgid, flowid);
 
   uint32_t stream_start_offset = pkt_off;
   uint32_t stream_end_offset = stream_start_offset + slmp_pld_len;
 
-  spin_msg_state_t *my_state;
-  HASH_FIND_INT(msg_states, &msgid, my_state);
-  if (!my_state) {
-    printf("FATAL: cannot find msgid=%u in hashtable\n", msgid);
-    for (;;)
-      ;
-  }
-  DEBUG("my_state=%p &mpit_segment=%p\n", my_state, &my_state->seg);
-
+  spin_core_state_t *my_state = &dtmem->state[msgid];
   my_state->params.streambuf = (void *)slmp_pld;
   // first CORE_COUNT pages are for the req/resp interface
   my_state->params.userbuf = HOST_ADDR(args) + CORE_COUNT * PAGE_SIZE;
   uint64_t last = stream_end_offset;
 
-  // hang if host memory not defined
+// hang if host memory not defined
+#ifdef DATATYPES_DEBUG
   if (!check_host_mem(args)) {
     printf("FATAL: host memory size not enough\n");
     for (;;)
       ;
   }
+#endif
 
   uint32_t start = cycles();
 
-  spin_segment_manipulate(&my_state->seg, stream_start_offset, &last,
+  spin_segment_manipulate(&my_state->state, stream_start_offset, &last,
                           &my_state->params);
 
   uint32_t end = cycles();
@@ -294,11 +194,4 @@ void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];
-
-#ifdef USE_SPIN_SPINLOCK
-  spin_lock_init(&spinlock);
-  spin_lock_init(&print_spinlock);
-#else
-  amo_store(&lock_owner, 0);
-#endif
 }

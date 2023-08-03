@@ -110,6 +110,7 @@ void hpu_entry() {
     }
   }
 
+  /*
   UMM_MALLOC_CFG_HEAP_ADDR = &__l2_heap_start;
   UMM_MALLOC_CFG_HEAP_SIZE = (uint32_t)&__l2_heap_size;
 
@@ -119,6 +120,7 @@ void hpu_entry() {
       umm_info(0, true);
     }
   }
+  */
 
   // we save these now because can't access them in user mode
   write_register(x10, cluster_id);
