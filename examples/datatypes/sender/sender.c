@@ -295,10 +295,20 @@ int main(int argc, char *argv[]) {
 
       buffers_t bufs = prepare_buffers(&info, &args, t);
 
-      // no flow control for now
+      // send message in parallel
+#pragma omp parallel for
       for (int i = 0; i < rts.num_parallel_msgs; ++i) {
-        ret = slmp_sendmsg(&sock, from.sin_addr.s_addr, rand(), bufs.streambuf,
-                           bufs.streambuf_size, 0);
+        int msgid;
+        if (rts.num_parallel_msgs == 1) {
+          // single message -- does not matter
+          // multiple parallel messages: use monotonic increasing ID
+          msgid = rand();
+        } else {
+          msgid = i + (i << 24); // lowest byte for handler, highest for MPQ
+        }
+        // no flow control for now
+        slmp_sendmsg(&sock, from.sin_addr.s_addr, msgid, bufs.streambuf,
+                     bufs.streambuf_size, 0);
       }
 
       if (exit_flag) {

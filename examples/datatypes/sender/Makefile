@@ -1,6 +1,6 @@
 CC = mpicc
 CXX = mpicxx
-CFLAGS ?= -O3 -g -march=native -I../mpitypes/install/include
+CFLAGS ?= -O3 -g -march=native -I../mpitypes/install/include -fopenmp
 LIBS ?= $(shell realpath ../../../../../../../../lib)
 
 CFLAGS += -Wall
