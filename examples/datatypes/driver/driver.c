@@ -98,16 +98,14 @@ void interactive_cb(uint64_t user_ptr, uint64_t nic_arrival_time,
       pspinsim_packet_eos();
     }
 
-    goto fini;
+    free(fb_args);
+    return;
   }
 
   // send rest of message
   packet_descr_t *pkt = &msg->packets[next_idx];
   pspinsim_packet_add(fb_args->ec, fb_args->msgid, pkt->p, pkt->len, pkt->len,
                       pkt->is_eom, 0, user_ptr);
-
-fini:
-  free(fb_args);
 }
 
 int main(int argc, char *argv[]) {
@@ -163,6 +161,7 @@ int main(int argc, char *argv[]) {
 
   // load dataloops L2 image
   spin_ec_t *ec = gdriver_get_ectx_mems();
+
   struct mem_area handler_mem = {
       .addr = ec->handler_mem_addr,
       .size = ec->handler_mem_size,
