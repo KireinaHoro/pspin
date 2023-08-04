@@ -101,7 +101,7 @@ module l2_mem #(
     .MEM_NUM_BANKS  (N_PAR_CUTS),
     .MEM_ADDR_WIDTH (MEM_ADDR_WIDTH),
     .MEM_DATA_WIDTH (CUT_DW),
-    .MEM_LATENCY    (2),
+    .MEM_LATENCY    (1),
     .TOPOLOGY       (tcdm_interconnect_pkg::LIC)
   ) i_axi_to_mem_banked (
     .clk_i,
