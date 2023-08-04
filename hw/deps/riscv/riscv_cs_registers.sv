@@ -1570,6 +1570,7 @@ end //PULP_SECURE
       // minstret is located at index 2
       // Programable HPM counters start at index 3
       
+`ifdef VERILATOR
       always_ff @(posedge clk, negedge rst_n) begin
         if( (cnt_gidx == 1) || (cnt_gidx >= (NUM_MHPMCOUNTERS+3) ) ) begin : g_non_implemented
           mhpmcounter_q[cnt_gidx] <= 'b0;
@@ -1581,6 +1582,21 @@ end //PULP_SECURE
             end
         end
       end
+`else
+      if( (cnt_gidx == 1) || (cnt_gidx >= (NUM_MHPMCOUNTERS+3) ) ) begin : g_non_implemented
+        always_ff @(posedge clk) begin
+          mhpmcounter_q[cnt_gidx] <= 'b0;
+        end
+      end else begin : g_implemented
+        always_ff @(posedge clk, negedge rst_n) begin
+            if (!rst_n) begin
+                mhpmcounter_q[cnt_gidx] <= 'b0;
+            end else begin
+                mhpmcounter_q[cnt_gidx] <= mhpmcounter_n[cnt_gidx];
+            end
+        end
+      end
+`endif
     end
   endgenerate
 
@@ -1616,6 +1632,7 @@ end //PULP_SECURE
   genvar inh_gidx;
   generate
     for(inh_gidx = 0; inh_gidx < 32; inh_gidx++) begin : g_mcountinhibit
+`ifdef VERILATOR
       always_ff @(posedge clk, negedge rst_n) begin
         if( (inh_gidx == 1) || (inh_gidx >= (NUM_MHPMCOUNTERS+3) ) ) begin : g_non_implemented
           mcountinhibit_q[inh_gidx] <= 'b1; // default disable
@@ -1627,6 +1644,21 @@ end //PULP_SECURE
           end
         end
       end
+`else
+      if( (inh_gidx == 1) || (inh_gidx >= (NUM_MHPMCOUNTERS+3) ) ) begin : g_non_implemented
+        always_ff @(posedge clk) begin
+          mcountinhibit_q[inh_gidx] <= 'b1; // default disable
+        end
+      end else begin : g_implemented
+        always_ff @(posedge clk, negedge rst_n) begin
+          if (!rst_n) begin
+            mcountinhibit_q[inh_gidx] <= 'b1; // default disable
+          end else begin
+            mcountinhibit_q[inh_gidx] <= mcountinhibit_n[inh_gidx];
+          end
+        end
+      end
+`endif
     end
   endgenerate
 
