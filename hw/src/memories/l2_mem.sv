@@ -17,6 +17,7 @@ module l2_mem #(
   parameter int unsigned  AXI_UW = 0,   // [bit]
   // Memory
   parameter int unsigned  N_BYTES = 0,   // [B], must be a power of 2
+  parameter int unsigned  SRAM_LATENCY = 1,
   // Cuts
   parameter int unsigned  CUT_DW = 64,  // [bit], must be a power of 2 and >=8
   parameter int unsigned  CUT_N_WORDS = 16384,  // must be a power of 2
@@ -101,7 +102,7 @@ module l2_mem #(
     .MEM_NUM_BANKS  (N_PAR_CUTS),
     .MEM_ADDR_WIDTH (MEM_ADDR_WIDTH),
     .MEM_DATA_WIDTH (CUT_DW),
-    .MEM_LATENCY    (1),
+    .MEM_LATENCY    (SRAM_LATENCY),
     .TOPOLOGY       (tcdm_interconnect_pkg::LIC)
   ) i_axi_to_mem_banked (
     .clk_i,
@@ -157,7 +158,8 @@ module l2_mem #(
     for (genvar iRow = 0; iRow < N_SER_CUTS; iRow++) begin : gen_rows
       sram #(
         .DATA_WIDTH (CUT_DW),
-        .N_WORDS    (CUT_N_WORDS)
+        .N_WORDS    (CUT_N_WORDS),
+        .LATENCY    (SRAM_LATENCY),
       ) i_mem_cut (
         .clk_i,
         .rst_ni,

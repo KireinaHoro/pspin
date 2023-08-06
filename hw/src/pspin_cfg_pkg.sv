@@ -83,12 +83,14 @@ package automatic pspin_cfg_pkg;
   localparam int unsigned MEM_PKT_N_PAR_CUTS          = 8;
   localparam int unsigned MEM_PKT_CUT_N_WORDS         = 1024;
   localparam int unsigned MEM_PKT_CUT_DW              = 512;
+  localparam int unsigned MEM_PKT_LATENCY             = 2;
 
   // L2 handler memory
   localparam int unsigned MEM_HND_SIZE                = 1*1024*1024;
   localparam int unsigned MEM_HND_N_PAR_CUTS          = 32; // at least 32 banks: 2 * 2 * 8
   localparam int unsigned MEM_HND_CUT_N_WORDS         = 4096;
   localparam int unsigned MEM_HND_CUT_DW              = 64;
+  localparam int unsigned MEM_HND_LATENCY             = 2;
 
   // Interface types
   typedef logic [AXI_AW-1:0]         addr_t;

@@ -13,6 +13,7 @@
 module sram #(
   parameter int unsigned DATA_WIDTH = 0,   // [bit]
   parameter int unsigned N_WORDS    = 0,
+  parameter int unsigned LATENCY    = 1,
   parameter              SimInit    = "none",  
   // Dependent parameters, do not override!
   parameter int unsigned N_BYTES = DATA_WIDTH/8,
@@ -35,7 +36,7 @@ module sram #(
     .DataWidth    ( DATA_WIDTH  ),
     .ByteWidth    ( 8           ),
     .NumPorts     ( 1           ),
-    .Latency      ( 1           ),
+    .Latency      ( LATENCY     ),
     .SimInit      ( SimInit     ),
     .PrintSimCfg  ( 1'b0        )
   ) i_tc_sram (
