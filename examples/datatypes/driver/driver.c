@@ -33,7 +33,6 @@ typedef struct {
   bool present;
 } msg_descr_t;
 msg_descr_t msgs[NUM_MSGS];
-int tot_msgs = 0;
 
 // copy
 void packet_handler(u_char *user_data, const struct pcap_pkthdr *pkthdr,
@@ -48,9 +47,11 @@ void packet_handler(u_char *user_data, const struct pcap_pkthdr *pkthdr,
     return;
 
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
+  /*
   printf("Got SLMP packet: msgid=%d off=%d flags=%#x tot_len=%d\n",
          ntohl(hdrs->slmp_hdr.msg_id), ntohl(hdrs->slmp_hdr.pkt_off), flags,
          pkthdr->len);
+         */
 
   int msgid = ntohl(hdrs->slmp_hdr.msg_id) & 0xff;
   msgs[msgid].present = true;
@@ -157,6 +158,11 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "pcap_loop() failed: %s\n", pcap_geterr(fp));
     ret = EXIT_FAILURE;
     goto fail;
+  }
+  for (int i = 0; i < NUM_MSGS; ++i) {
+    if (msgs[i].cur_idx) {
+      printf("SLMP Message #%d: %d packets\n", i, msgs[i].cur_idx);
+    }
   }
 
   // load dataloops L2 image
