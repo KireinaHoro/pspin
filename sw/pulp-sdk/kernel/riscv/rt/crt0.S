@@ -40,7 +40,7 @@ _entry:
   bltu    t0, t1, 1b
 
   /* Stack initialization */
-  la      x2, stack
+  la      sp, stack
 
   /* set the stack pointer */
   /* get cluster ID */
@@ -49,24 +49,24 @@ _entry:
   p.bclr  t1, t1, 25, 6
   li      t2, ARCHI_CLUSTER_SIZE
   mul     t1, t1, t2 
-  add     x2, x2, t1
+  add     sp, sp, t1
 
   /* get core ID */
   p.bclr  t1, t0, 26, 5
   la      t2, __rt_stack_size
   mul     t2, t1, t2
-  add     x2, x2, t2
+  add     sp, sp, t2
 
-  bne     t1, x0, __rt_slave_start
-  jal     x1, cluster_init
+  bne     t1, zero, __rt_slave_start
+  jal     ra, cluster_init
 
   li      s2, ARCHI_EU_DEMUX_ADDR
-  addi    t3, x0, -1
+  addi    t3, zero, -1
   sw      t3, EU_DISPATCH_DEMUX_OFFSET + EU_DISPATCH_TEAM_CONFIG(s2)
-  sw      x0, EU_DISPATCH_DEMUX_OFFSET + EU_DISPATCH_FIFO_ACCESS(s2)
+  sw      zero, EU_DISPATCH_DEMUX_OFFSET + EU_DISPATCH_FIFO_ACCESS(s2)
 
   /* Jump to the HPU entry function */
-  jal     x1, hpu_entry
+  jal     ra, hpu_entry
 
   .global _init
   .global _fini
@@ -79,7 +79,7 @@ _fini:
   li      s2, ARCHI_EU_DEMUX_ADDR
   p.elw   t0, EU_DISPATCH_DEMUX_OFFSET + EU_DISPATCH_FIFO_ACCESS(s2)
 
-  jal     x1, hpu_entry
+  jal     ra, hpu_entry
 
 .section .vectors, "ax"
 .option norvc;
@@ -121,7 +121,7 @@ _fini:
   .org 0x80
   .global _start
 _start:
-  jal x0, _entry
+  jal zero, _entry
 
 
 __rt_no_irq_handler:
