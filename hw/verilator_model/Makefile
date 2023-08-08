@@ -7,7 +7,7 @@ SIM_LIB_SRCS=src/pspinsim.cpp
 CXX ?= g++
 VERILATOR_COMPILER_WORKERS ?= 8
 
-TRACE_DEPTH?=6
+TRACE_DEPTH?=10
 VFLAGS_RELEASE=--Mdir obj_dir_release --sv -Wno-COMBDLY -Wno-UNOPTFLAT -Wno-NOLATCH -Wno-WIDTHCONCAT -j $(VERILATOR_COMPILER_WORKERS) +systemverilogext+sv -Wno-lint -CFLAGS "-fPIC"
 VFLAGS_DEBUG=--Mdir obj_dir_debug --sv --assert --trace --trace-structs --trace-depth $(TRACE_DEPTH) -CFLAGS "-DVERILATOR_HAS_TRACE -fPIC" -Wno-COMBDLY -Wno-UNOPTFLAT -Wno-NOLATCH -Wno-WIDTHCONCAT -j $(VERILATOR_COMPILER_WORKERS) +systemverilogext+sv -Wno-lint
 
@@ -240,12 +240,12 @@ SV_SRCS=../deps/axi/src/axi_pkg.sv \
 debug:
 	$(VERILATOR_CC) $(VFLAGS_DEBUG) $(SV_INC) -cc $(SV_SRCS) --top-module $(TOP_MODULE) --build $(SIM_LIB_SRCS) -o pspin
 	@mkdir -p lib/
-	$(CXX) $(LIB_DEBUG_FLAGS) -o lib/libpspin_debug.so $(SIM_LIB_SRCS) obj_dir_debug/Vpspin_verilator__ALL.a $(VERILATOR_ROOT)/include/verilated.cpp $(VERILATOR_ROOT)/include/verilated_vcd_c.cpp -Wl,--no-undefined
+	$(CXX) $(LIB_DEBUG_FLAGS) -o lib/libpspin_debug.so $(SIM_LIB_SRCS) obj_dir_debug/Vpspin_verilator__ALL.a $(VERILATOR_ROOT)/include/verilated.cpp $(VERILATOR_ROOT)/include/verilated_vcd_c.cpp -Wl,--no-undefined -pthread
 
 release:
 	$(VERILATOR_CC) $(VFLAGS_RELEASE) $(SV_INC) -cc $(SV_SRCS) --top-module $(TOP_MODULE) --build $(SIM_LIB_SRCS) -o pspin
 	@mkdir -p lib/
-	$(CXX) $(LIB_RELEASE_FLAGS) -o lib/libpspin.so $(SIM_LIB_SRCS) obj_dir_release/Vpspin_verilator__ALL.a $(VERILATOR_ROOT)/include/verilated.cpp -Wl,--no-undefined
+	$(CXX) $(LIB_RELEASE_FLAGS) -o lib/libpspin.so $(SIM_LIB_SRCS) obj_dir_release/Vpspin_verilator__ALL.a $(VERILATOR_ROOT)/include/verilated.cpp -Wl,--no-undefined -pthread
 
 clean:
 	@rm -rf obj_dir_debug/ obj_dir_release/ bin/pspin bin/pspin_debug lib/libpspin.so lib/libpspin_debug.so > /dev/null 2> /dev/null

@@ -159,7 +159,7 @@ module l2_mem #(
       sram #(
         .DATA_WIDTH (CUT_DW),
         .N_WORDS    (CUT_N_WORDS),
-        .LATENCY    (SRAM_LATENCY),
+        .LATENCY    (SRAM_LATENCY)
       ) i_mem_cut (
         .clk_i,
         .rst_ni,

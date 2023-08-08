@@ -138,6 +138,7 @@ module hw_barrier_unit
       interc_we_target_mask       = 1'b0;
       interc_read_req_del_SN      = 2'b0;
       periph_bus_slave.r_rdata    = '0;
+      trigger_matrix[NB_CORES+1]  = barrier_trigger_core_i;
       trigger_matrix[NB_CORES]    = '0;
 
       if ( periph_bus_slave.req == 1'b1 ) begin
@@ -165,7 +166,6 @@ module hw_barrier_unit
     end
 
     // combination of all trigger signals and status clear logic
-    assign trigger_matrix[NB_CORES+1] = barrier_trigger_core_i;
     generate
       for ( I = 0; I < NB_CORES; I++ ) begin
         for ( J = 0; J < NB_CORES+2; J++ ) assign trigger_matrix_transp[I][J] = trigger_matrix[J][I];

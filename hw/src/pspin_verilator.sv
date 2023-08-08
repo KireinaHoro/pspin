@@ -432,13 +432,6 @@ module pspin_verilator #(
         $readmemh({get_slm_path(), "prog_mem_stim.slm"}, i_pspin.i_prog_mem.i_sram.i_tc_sram.sram);
     end
     
-    // Wait for termination
-    always_ff @(posedge clk_i, negedge rst_ni) begin
-      if (i_pspin.i_mpq_engine.mpq_busy == '0 && i_pspin.i_mpq_engine.eos_i && i_pspin.i_mpq_engine.fifo_empty) begin
-        $finish;
-      end
-    end
-
     /* enable instruction fetch signal */
     assign cl_fetch_en = (rst_ni) ? 4'b1111 : '0;
 
@@ -666,12 +659,8 @@ module pspin_verilator #(
     assign her_descr.mpq_meta.th_size               = her_meta_th_size_i;
     assign her_descr.mpq_meta.scratchpad_addr[0]    = her_meta_scratchpad_0_addr_i;
     assign her_descr.mpq_meta.scratchpad_addr[1]    = her_meta_scratchpad_1_addr_i;
-    assign her_descr.mpq_meta.scratchpad_addr[2]    = her_meta_scratchpad_2_addr_i;
-    assign her_descr.mpq_meta.scratchpad_addr[3]    = her_meta_scratchpad_3_addr_i;
     assign her_descr.mpq_meta.scratchpad_size[0]    = her_meta_scratchpad_0_size_i;
     assign her_descr.mpq_meta.scratchpad_size[1]    = her_meta_scratchpad_1_size_i;
-    assign her_descr.mpq_meta.scratchpad_size[2]    = her_meta_scratchpad_2_size_i;
-    assign her_descr.mpq_meta.scratchpad_size[3]    = her_meta_scratchpad_3_size_i;
     
     // Connecting feedback
     assign feedback_her_addr_o                      = feedback.pkt_addr;
