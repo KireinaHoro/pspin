@@ -304,7 +304,7 @@ int main(int argc, char *argv[]) {
           // multiple parallel messages: use monotonic increasing ID
           msgid = rand();
         } else {
-          msgid = i + (i << 24); // lowest byte for handler, highest for MPQ
+          msgid = htonl(i); // small-endian for MPQ -- slmp_sendmsg will swap again
         }
         // no flow control for now
         slmp_sendmsg(&sock, from.sin_addr.s_addr, msgid, bufs.streambuf,
