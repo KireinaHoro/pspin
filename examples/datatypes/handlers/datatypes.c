@@ -47,10 +47,6 @@
 
 // we assume we have at most CORE_COUNT message
 #define NUM_MSGS CORE_COUNT
-// we take the first byte in little endian
-// matching engine will use the last byte to map to an MPQ
-#define MSGID_IDX(hdrs) ((ntohl(hdrs->slmp_hdr.msg_id) % 0xff) % NUM_MSGS)
-
 uint32_t msg_start[NUM_MSGS];
 
 #define SWAP(a, b, type)                                                       \
@@ -91,11 +87,10 @@ __handler__ void datatypes_hh(handler_args_t *args) {
 
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
 
-  int msgid = MSGID_IDX(hdrs);
   int flowid = args->task->flow_id;
-  DEBUG("Start of message #%u, flowid %d\n", msgid, flowid);
+  printf("Start of message #%u\n", flowid);
 
-  msg_start[msgid] = cycles();
+  msg_start[flowid] = cycles();
 
   if (!SYN(flags)) {
     printf("Error: first packet did not require SYN; flags = %#x\n", flags);
@@ -111,11 +106,10 @@ __handler__ void datatypes_th(handler_args_t *args) {
 
   // counter 1: message average time
   // FIXME: should this include the notification time?
-  int msgid = MSGID_IDX(hdrs);
   int flowid = args->task->flow_id;
-  push_counter(&__host_data.counters[1], cycles() - msg_start[msgid]);
+  push_counter(&__host_data.counters[1], cycles() - msg_start[flowid]);
 
-  DEBUG("End of message #%u, flowid %d\n", msgid, flowid);
+  DEBUG("End of message #%u\n", flowid);
 
   if (!EOM(flags)) {
     printf("Error: last packet did not have EOM; flags = %#x\n", flags);
@@ -125,7 +119,7 @@ __handler__ void datatypes_th(handler_args_t *args) {
   // notify host for unpacked message -- 0-byte host request
   // FIXME: this is synchronous; do we need an asynchronous interface?
   // repurposed for msgid for diagnostics
-  fpspin_host_req(args, msgid);
+  fpspin_host_req(args, flowid);
 }
 
 static inline bool check_host_mem(handler_args_t *args) {
@@ -149,15 +143,12 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
 
-  int msgid = MSGID_IDX(hdrs);
   int flowid = args->task->flow_id;
-  DEBUG("Packet: offset %d, pld size %d, msgid %d, flowid %d\n", pkt_off,
-        slmp_pld_len, msgid, flowid);
 
   uint32_t stream_start_offset = pkt_off;
   uint32_t stream_end_offset = stream_start_offset + slmp_pld_len;
 
-  spin_core_state_t *my_state = &dtmem->state[msgid];
+  spin_core_state_t *my_state = &dtmem->state[flowid];
   my_state->params.streambuf = (void *)slmp_pld;
   // first CORE_COUNT pages are for the req/resp interface
   my_state->params.userbuf = HOST_ADDR(args) + CORE_COUNT * PAGE_SIZE;
