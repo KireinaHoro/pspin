@@ -29,7 +29,7 @@
 #define SIZE_MSG (128 * 1024 * 1024) // 128 MB
 #define MSG_PAGES (SIZE_MSG / PAGE_SIZE)
 
-#define DATATYPES_DEBUG
+// #define DATATYPES_DEBUG
 
 #ifdef DATATYPES_DEBUG
 #define DEBUG(...)                                                             \
@@ -153,6 +153,10 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   // first CORE_COUNT pages are for the req/resp interface
   my_state->params.userbuf = HOST_ADDR(args) + CORE_COUNT * PAGE_SIZE;
   uint64_t last = stream_end_offset;
+
+  int time = cycles();
+  DEBUG("[%d] P@%p: [%d:%d] #%d @ %p\n", time, task->l2_pkt_mem,
+        stream_start_offset, stream_end_offset, flowid, my_state);
 
 // hang if host memory not defined
 #ifdef DATATYPES_DEBUG

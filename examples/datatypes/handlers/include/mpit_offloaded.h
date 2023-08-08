@@ -702,13 +702,16 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 	if (first == *lastp)
 	{
 		/* nothing to do */
-		printf("dloop_segment_manipulate: warning: first == last (" DLOOP_OFFSET_FMT_DEC_SPEC ")\n", first);
+		printf("warning: first == last (" DLOOP_OFFSET_FMT_DEC_SPEC
+				"), segp=%p\n", first, segp);
 		return;
 	}
 
 	/* first we ensure that stream_off and first are in the same spot */
 	if (first != stream_off)
 	{
+		printf("first=" DLOOP_OFFSET_FMT_DEC_SPEC "; stream_off=" DLOOP_OFFSET_FMT_DEC_SPEC "; resetting.\n",
+						 first, stream_off);
 		if (first < stream_off)
 		{
 			DLOOP_SEGMENT_RESET_VALUES;
@@ -726,11 +729,17 @@ static inline void spin_segment_manipulate(struct DLOOP_Segment *segp,
 
 			/* --BEGIN ERROR HANDLING-- */
 			/* verify that we're in the right location */
-			DDTASSERT(tmp_last == first);
+			if (tmp_last != first) {
+				printf("tmp_last=" DLOOP_OFFSET_FMT_DEC_SPEC ", first=" DLOOP_OFFSET_FMT_DEC_SPEC ", segp=%p\n", tmp_last, first, segp);
+				DDTASSERT(tmp_last == first);
+			}
 			/* --END ERROR HANDLING-- */
 		}
 
 		DLOOP_SEGMENT_LOAD_LOCAL_VALUES;
+
+		printf("done repositioning stream_off; first=" DLOOP_OFFSET_FMT_DEC_SPEC ", stream_off=" DLOOP_OFFSET_FMT_DEC_SPEC ", last=" DLOOP_OFFSET_FMT_DEC_SPEC "\n",
+						 first, stream_off, last);
 	}
 
 #ifdef DDT_TRACE

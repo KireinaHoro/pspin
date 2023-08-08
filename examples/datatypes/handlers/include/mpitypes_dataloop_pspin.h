@@ -83,8 +83,8 @@ struct MPIT_iovec {
 #define DLOOP_Ensure_Offset_fits_in_pointer(offset_) \
     DLOOP_Assert((offset_) == (DLOOP_Offset)(void *)(offset_))
 
-#define DLOOP_OFFSET_FMT_DEC_SPEC "%ld"
-#define DLOOP_OFFSET_FMT_HEX_SPEC "%lx"
+#define DLOOP_OFFSET_FMT_DEC_SPEC "%lld"
+#define DLOOP_OFFSET_FMT_HEX_SPEC "%llx"
 
 /* Marks a variable decl as unused.  Examples:
  *   int UNUSED(foo) = 3;
