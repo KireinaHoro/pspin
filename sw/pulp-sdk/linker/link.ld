@@ -153,8 +153,8 @@ SECTIONS
   .stack : {
     . = ALIGN(4);
     . = ALIGN(16);
-    . = . + 0x400;
-    stack = .;
+    . = . + 0x400; /* pspin_cfg_pkg::L1_RUNTIME_OFFSET */
+    stack = .; /* max 16KB; pspin_cfg_pkg::L1_RUNTIME_SIZE */
   } > L1
 
 

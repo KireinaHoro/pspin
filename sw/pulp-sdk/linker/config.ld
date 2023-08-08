@@ -6,7 +6,7 @@ __L2   = 0x80000;
 __L1Cl = 0x10000;
 __FETCH_ALL = 0x0;
 __ACTIVE_FC = 0x1;
-__rt_stack_size = 0x400;
+__rt_stack_size = 0x800; /* 16KB for runtime, 8 cores => 2KB stack */
 __NB_ACTIVE_PE = 8;
 __rt_platform = 0;
 __rt_iodev = 1;
