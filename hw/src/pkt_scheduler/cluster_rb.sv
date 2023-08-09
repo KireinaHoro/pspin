@@ -15,6 +15,8 @@
      - if head_ptr =< tail_ptr, the available space is max(mem_region_end - tail_ptr, head_ptr). 
      - if head_ptr > tail_ptr, the available space is head_ptr - tail_ptr.
 
+    For allocated slots, head_ptr is inclusive and tail_ptr is exclusive.
+
     Free are not treated as FIFO pops, but they came with their own memory index, i.e., the index
     at which the memory region to free starts, and size. A memory index to free is not necesserly
     equal to the head_ptr but can be samewhere in between head_ptr and tail_ptr. The head_ptr is
@@ -161,7 +163,7 @@ module cluster_rb #(
                     // |<- start    | <- pop   | <-push   [data fits here]   | <- end
                     data_fits = 1'b1;
                 end
-                else if (push_size < head_ptr_q) begin //FIXME: this should be <= ?
+                else if (push_size <= head_ptr_q) begin
                     // |<- start  [data fits here]  | <- pop   | <-push   | <- end
                     //push doesn't fit there, we start from 0    
                     data_fits = 1'b1;

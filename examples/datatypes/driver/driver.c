@@ -18,6 +18,8 @@
 
 #include "../include/datatypes_host.h"
 
+#define LOG(msg, ...) printf("[datatypes driver] " msg, __VA_ARGS__)
+
 #define NUM_MSGS 16 // maximum
 
 typedef struct {
@@ -47,13 +49,8 @@ void packet_handler(u_char *user_data, const struct pcap_pkthdr *pkthdr,
     return;
 
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
-  /*
-  printf("Got SLMP packet: msgid=%d off=%d flags=%#x tot_len=%d\n",
-         ntohl(hdrs->slmp_hdr.msg_id), ntohl(hdrs->slmp_hdr.pkt_off), flags,
-         pkthdr->len);
-         */
 
-  int msgid = ntohl(hdrs->slmp_hdr.msg_id) & 0xff;
+  int msgid = hdrs->slmp_hdr.msg_id & 0xff;
   msgs[msgid].present = true;
 
   if (msgs[msgid].cur_idx == msgs[msgid].num_ptrs) {
@@ -80,12 +77,11 @@ void interactive_cb(uint64_t user_ptr, uint64_t nic_arrival_time,
   feedback_args_t *fb_args = (feedback_args_t *)user_ptr;
   msg_descr_t *msg = &msgs[fb_args->msgid];
 
-  printf("Finished packet #%d of message #%d\n", fb_args->pktidx,
-         fb_args->msgid);
+  LOG("Finished packet #%d of message #%d\n", fb_args->pktidx, fb_args->msgid);
 
   int next_idx = ++fb_args->pktidx;
   if (next_idx == msg->cur_idx) {
-    printf("Finished message #%d\n", fb_args->msgid);
+    LOG("Finished message #%d\n", fb_args->msgid);
     msg->present = false;
 
     bool remaining = false;
@@ -161,7 +157,7 @@ int main(int argc, char *argv[]) {
   }
   for (int i = 0; i < NUM_MSGS; ++i) {
     if (msgs[i].cur_idx) {
-      printf("SLMP Message #%d: %d packets\n", i, msgs[i].cur_idx);
+      LOG("SLMP Message #%d: %d packets\n", i, msgs[i].cur_idx);
     }
   }
 

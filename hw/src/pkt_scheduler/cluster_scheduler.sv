@@ -91,6 +91,8 @@ module cluster_scheduler #(
     pkt_buf_size_t                  pkt_buff_free_space;
 
     //true if the HER allocator is ready
+    // XXX: if we are not using the ready signal, the selected cluster_rb in the shim
+    // must be able to allocate the indicated free space
     logic pkt_alloc_ready; //unused in synthesis
 
     //internal state

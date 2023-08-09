@@ -35,6 +35,7 @@ struct arguments {
     MODE_SENDING,
   } mode;
   int rts_port;
+  int slmp_ipg;
   int num_elements;
   const char *out_file;
   const char *ddt_out_file;
@@ -53,6 +54,7 @@ static char args_doc[] = "TYPE_DESCR_STR";
 static struct argp_option options[] = {
     {0, 0, 0, 0, "Sending options:"},
     {"rts-port", 'r', "PORT", 0, "UDP port to receive RTS from host app"},
+    {"ipg", 'g', "NUM", 0, "inter-packet gap for flow control to SLMP"},
 
     {0, 0, 0, 0, "Reference options:"},
     {"reference", 'v', 0, 0, "run in reference mode to produce golden image"},
@@ -67,6 +69,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   switch (key) {
   case 'r':
     args->rts_port = atoi(arg);
+    break;
+  case 'g':
+    args->slmp_ipg = atoi(arg);
     break;
   case 'v':
     args->mode = MODE_REFERENCE;
@@ -161,6 +166,7 @@ int main(int argc, char *argv[]) {
   struct arguments args = {
       .mode = MODE_SENDING,
       .rts_port = RTS_PORT,
+      .slmp_ipg = 0,
       .num_elements = 1,
   };
 
@@ -304,11 +310,12 @@ int main(int argc, char *argv[]) {
           // multiple parallel messages: use monotonic increasing ID
           msgid = rand();
         } else {
-          msgid = htonl(i); // small-endian for MPQ -- slmp_sendmsg will swap again
+          msgid =
+              htonl(i); // small-endian for MPQ -- slmp_sendmsg will swap again
         }
         // no flow control for now
         slmp_sendmsg(&sock, from.sin_addr.s_addr, msgid, bufs.streambuf,
-                     bufs.streambuf_size, 0);
+                     bufs.streambuf_size, args.slmp_ipg);
       }
 
       if (exit_flag) {
