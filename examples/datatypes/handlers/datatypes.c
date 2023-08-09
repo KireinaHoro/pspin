@@ -40,6 +40,14 @@
 #define DEBUG(...)
 #endif
 
+#define FROM_L1
+
+#ifdef FROM_L1
+#define PKT_MEM(task) ((task)->pkt_mem)
+#else
+#define PKT_MEM(task) ((task)->l2_pkt_mem)
+#endif
+
 // perf counter layout:
 // 0: per-packet cycles
 // 1: per-message cycles
@@ -76,12 +84,12 @@ static void send_ack(slmp_pkt_hdr_t *hdrs, task_t *task) {
   prepare_hdrs_ack(hdrs, MKACK);
 
   spin_cmd_t put;
-  spin_send_packet(task->pkt_mem, sizeof(slmp_pkt_hdr_t), &put);
+  spin_send_packet(PKT_MEM(task), sizeof(slmp_pkt_hdr_t), &put);
 }
 
 __handler__ void datatypes_hh(handler_args_t *args) {
   task_t *task = args->task;
-  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
+  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(PKT_MEM(task));
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
 
@@ -100,7 +108,7 @@ __handler__ void datatypes_hh(handler_args_t *args) {
 
 __handler__ void datatypes_th(handler_args_t *args) {
   task_t *task = args->task;
-  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
+  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(PKT_MEM(task));
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
 
@@ -136,8 +144,8 @@ __handler__ void datatypes_ph(handler_args_t *args) {
 
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
 
-  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
-  uint8_t *slmp_pld = (uint8_t *)(task->pkt_mem) + sizeof(slmp_pkt_hdr_t);
+  slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(PKT_MEM(task));
+  uint8_t *slmp_pld = (uint8_t *)(PKT_MEM(task)) + sizeof(slmp_pkt_hdr_t);
   uint16_t slmp_pld_len = SLMP_PAYLOAD_LEN(hdrs);
 
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
@@ -155,7 +163,7 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   uint64_t last = stream_end_offset;
 
   int time = cycles();
-  DEBUG("[%d] P@%p: [%d:%d] #%d @ %p\n", time, task->l2_pkt_mem,
+  DEBUG("[%d] P@%p: [%d:%d] #%d @ %p\n", time, PKT_MEM(task),
         stream_start_offset, stream_end_offset, flowid, my_state);
 
 // hang if host memory not defined
