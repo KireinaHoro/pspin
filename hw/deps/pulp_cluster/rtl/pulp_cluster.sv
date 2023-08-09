@@ -1254,12 +1254,6 @@ module pulp_cluster
       );
 
       // assign s_core_periph_bus[i].id = 1 << i;
-      assign s_core_periph_bus[i].req = '0;
-      assign s_core_periph_bus[i].add = '0;
-      assign s_core_periph_bus[i].wen = '0;
-      assign s_core_periph_bus[i].wdata = '0;
-      assign s_core_periph_bus[i].be = '0;
-      assign s_core_periph_bus[i].id = '0;
 
     end
   endgenerate
