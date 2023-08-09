@@ -88,7 +88,7 @@ __handler__ void datatypes_hh(handler_args_t *args) {
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
 
   int flowid = args->task->flow_id;
-  printf("Start of message #%u\n", flowid);
+  DEBUG("Start of message #%u\n", flowid);
 
   msg_start[flowid] = cycles();
 

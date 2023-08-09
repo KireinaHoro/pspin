@@ -388,7 +388,8 @@ int run_trial(fpspin_ctx_t *ctx) {
   send_rts(ctx);
   double rtt_start = curtime();
 
-  for (int i = 0; i < args->num_iterations; ++i) {
+  int i;
+  for (i = 0; i < args->num_iterations; ++i) {
     double cpu_start = curtime();
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, dim, dim, dim, 1.0,
                 app_data->A, dim, app_data->B, dim, 2, app_data->C, dim);
@@ -420,8 +421,9 @@ int run_trial(fpspin_ctx_t *ctx) {
 finish:
   // RTT finish
   app_data->rtt = curtime() - rtt_start;
+  double gflops = 2.0 * dim * dim * dim * i / app_data->dgemm_total / 1e9;
 
-  printf("DGEMM total: %lf; RTT: %lf\n", app_data->dgemm_total, app_data->rtt);
+  printf("DGEMM total: %lf, %lf GFLOPS; RTT: %lf\n", app_data->dgemm_total, gflops, app_data->rtt);
   return ret;
 }
 
