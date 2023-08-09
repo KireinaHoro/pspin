@@ -47,13 +47,8 @@ void packet_handler(u_char *user_data, const struct pcap_pkthdr *pkthdr,
     return;
 
   uint16_t flags = ntohs(hdrs->slmp_hdr.flags);
-  /*
-  printf("Got SLMP packet: msgid=%d off=%d flags=%#x tot_len=%d\n",
-         ntohl(hdrs->slmp_hdr.msg_id), ntohl(hdrs->slmp_hdr.pkt_off), flags,
-         pkthdr->len);
-         */
 
-  int msgid = ntohl(hdrs->slmp_hdr.msg_id) & 0xff;
+  int msgid = hdrs->slmp_hdr.msg_id & 0xff;
   msgs[msgid].present = true;
 
   if (msgs[msgid].cur_idx == msgs[msgid].num_ptrs) {
