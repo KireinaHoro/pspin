@@ -171,9 +171,10 @@ int main(int argc, char *argv[]) {
   void *l2_image;
   size_t l2_image_size;
   uint32_t num_elements, userbuf_size;
+  uint32_t streambuf_size;
   void *ddt_mem_raw =
       prepare_ddt_nicmem(ddt_file, handler_mem, &l2_image, &l2_image_size,
-                         &num_elements, &userbuf_size);
+                         &num_elements, &userbuf_size, &streambuf_size);
 
   // install ectx
   gdriver_add_ectx(handlers_file, hh, ph, th, NULL, l2_image, l2_image_size,

@@ -22,7 +22,7 @@ typedef struct {
 static inline void *
 prepare_ddt_nicmem(const char *ddt_file, struct mem_area handler_mem,
                    void **nic_buffer, size_t *nic_buffer_size,
-                   uint32_t *num_elements, uint32_t *userbuf_size) {
+                   uint32_t *num_elements, uint32_t *userbuf_size, uint32_t *streambuf_size) {
   // read ddt bin
   FILE *f = fopen(ddt_file, "rb");
   if (!f) {
@@ -61,6 +61,7 @@ prepare_ddt_nicmem(const char *ddt_file, struct mem_area handler_mem,
   *num_elements = dtcount;
   *userbuf_size =
       dtinfo.true_lb + MAX(dtinfo.extent, dtinfo.true_extent) * dtcount;
+  *streambuf_size = dtinfo.size * dtcount;
   // buffer area before copying onto the NIC
   *nic_buffer_size = sizeof(spin_datatype_mem_t) + datatype_mem_size +
                      sizeof(spin_core_state_t) * NUM_HPUS;

@@ -37,6 +37,7 @@ struct arguments {
   int tune_num_hits;
   int tune_dim_start;
   int tune_dim_step;
+  int measure_iters;
   // arguments
   const char *type_descr_file;
 };
@@ -78,6 +79,7 @@ static struct argp_option options[] = {
      "number of trials in the measurement after tuning"},
     {"parallel-msgs", 'p', "NUM", 0,
      "number of messages to send in parallel at the sender"},
+    {"measure-iters", 'M', "NUM", 0, "measurement iterations"},
 
     {0, 0, 0, 0, "Benchmark tuning options:"},
     {"hits", 'h', "NUM", 0, "number of hits required for tune to succeed"},
@@ -122,6 +124,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   case 'p':
     args->num_parallel_msgs = atoi(arg);
     break;
+  case 'M':
+    args->measure_iters = atoi(arg);
+    break;
   case 'h':
     args->tune_num_hits = atoi(arg);
     break;
@@ -153,15 +158,25 @@ typedef struct {
   int file_id;
   struct arguments args;
   uint32_t userbuf_size;
+  uint32_t streambuf_size;
   int num_received;      // received but unclaimed (from parallel messages)
   uint32_t num_elements; // number of datatype elements, from DDT bin
 
   int dim; // dimension of dgemm matrices - current trial
   double *A, *B, *C;
 
-  // performance measurements
-  double dgemm_total;
-  double rtt;
+  // theoretical GFLOPS
+  double dgemm_gflops_theo;
+  // measured dgemm tput without datatypes
+  double dgemm_gflops_ref;
+
+  // performance measurements -- arrays of measure_iters
+  // measured dgemm time with datatypes
+  double *dgemm_elapsed;
+  // measured datatypes rtt without dgemm
+  double *types_elapsed_ref;
+  // measured datatypes rtt with dgemm
+  double *types_elapsed;
 
   // RTS socket
   int rts_sockfd;
@@ -187,6 +202,7 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
       .dgemm_margin = 0.6,
       .num_trials = 10,
       .num_parallel_msgs = 1,
+      .measure_iters = 20,
       .rts_port = RTS_PORT,
       .tune_num_hits = 10,
       .tune_dim_start = 1000,
@@ -232,10 +248,12 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
   fpspin_addr_t nic_mem_base = ctx->handler_mem.addr;
   void *nic_buffer;
   size_t nic_buffer_size = 0;
-  void *datatype_mem_ptr_raw = prepare_ddt_nicmem(
-      args->type_descr_file, ctx->handler_mem, &nic_buffer, &nic_buffer_size,
-      &app_data->num_elements, &app_data->userbuf_size);
+  void *datatype_mem_ptr_raw =
+      prepare_ddt_nicmem(args->type_descr_file, ctx->handler_mem, &nic_buffer,
+                         &nic_buffer_size, &app_data->num_elements,
+                         &app_data->userbuf_size, &app_data->streambuf_size);
   printf("Userbuf size: %d\n", app_data->userbuf_size);
+  printf("Streambuf size: %d\n", app_data->streambuf_size);
   if (!nic_buffer_size) {
     // ddt remap failed
     return -1;
@@ -262,12 +280,28 @@ static void finish_datatypes_spin(fpspin_ctx_t *ctx) {
   free(app_data->B);
   free(app_data->C);
   close(app_data->rts_sockfd);
+
+  free(app_data->dgemm_elapsed);
+  free(app_data->types_elapsed);
+  free(app_data->types_elapsed_ref);
+
   free(app_data);
 
   // wait until all stdout are flushed
   printf("Waiting for stdout flush...\n");
   sleep(2);
   fpspin_exit(ctx);
+}
+
+static double dim_to_gflops(int dim, double elapsed) {
+  return 2.0 * dim * dim * dim / elapsed / 1e9;
+}
+
+static double rtt_to_mbps(datatypes_data_t *app_data, double rtt) {
+  struct arguments *args = &app_data->args;
+
+  return (double)app_data->streambuf_size * 8 * args->num_parallel_msgs / rtt /
+         1024 / 1024;
 }
 
 typedef void (*msg_handler_t)(fpspin_ctx_t *, uint8_t *);
@@ -378,7 +412,7 @@ void send_rts(fpspin_ctx_t *ctx) {
 }
 
 // return value: -1 if dgemm too long, 1 if too short; 0 if right on time
-int run_trial(fpspin_ctx_t *ctx) {
+int run_trial(fpspin_ctx_t *ctx, int measure_idx) {
   datatypes_data_t *app_data = to_data_ptr(ctx);
   struct arguments *args = &app_data->args;
   int dim = app_data->dim;
@@ -387,13 +421,14 @@ int run_trial(fpspin_ctx_t *ctx) {
   // RTS to sender - start of RTT
   send_rts(ctx);
   double rtt_start = curtime();
+  double dgemm_total = 0;
 
   int i;
   for (i = 0; i < args->num_iterations; ++i) {
     double cpu_start = curtime();
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, dim, dim, dim, 1.0,
                 app_data->A, dim, app_data->B, dim, 2, app_data->C, dim);
-    app_data->dgemm_total += curtime() - cpu_start;
+    dgemm_total += curtime() - cpu_start;
 
     if (query_once(ctx, NULL)) {
       if (i >= args->num_iterations - 1 - args->num_misses) {
@@ -418,19 +453,25 @@ int run_trial(fpspin_ctx_t *ctx) {
   app_data->num_received = 0;
   ret = 1;
 
-finish:
+finish:;
   // RTT finish
-  app_data->rtt = curtime() - rtt_start;
-  double gflops = 2.0 * dim * dim * dim * i / app_data->dgemm_total / 1e9;
+  double rtt = curtime() - rtt_start;
 
-  printf("DGEMM total: %lf, %lf GFLOPS; RTT: %lf\n", app_data->dgemm_total, gflops, app_data->rtt);
+  double mbps = rtt_to_mbps(app_data, rtt);
+  double gflops = i * dim_to_gflops(dim, dgemm_total);
+  if (measure_idx != -1) {
+    app_data->types_elapsed[measure_idx] = rtt;
+    app_data->dgemm_elapsed[measure_idx] = dgemm_total;
+  }
+  printf("DGEMM total: %lf; RTT: %lf\n", dgemm_total, rtt);
+  printf("DGEMM %lf GFLOPS, Datatypes %lf Mbps\n", gflops, mbps);
   return ret;
 }
 
-bool check_dgemm(struct arguments *args) {
+bool check_dgemm(datatypes_data_t *app_data) {
+  struct arguments *args = &app_data->args;
+
   const long dim = 2000;
-  const int iters = 50;
-  double flops = 2 * dim * dim * dim;
   printf("Checking DGEMM speed with dim=%ld...\n", dim);
 
   double *A, *B, *C;
@@ -439,15 +480,15 @@ bool check_dgemm(struct arguments *args) {
   // fpga1: Ryzen 7 2700 (Zen+), AVX2 VFMADD132PD (2*4 FLOP)
   //        reciprocal latency=1
   //        typical frequency 3.4 GHz, 8 cores
-  double theo_gflops = 3.4 * 2 * 4 * 8;
+  double theo_gflops = app_data->dgemm_gflops_theo = 3.4 * 2 * 4 * 8;
   double start = curtime();
 
-  for (int i = 0; i < iters; ++i)
+  for (int i = 0; i < args->measure_iters; ++i)
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, dim, dim, dim, 1.0,
                 A, dim, B, dim, 2, C, dim);
 
-  double elapsed = (curtime() - start) / iters;
-  double real_gflops = flops / elapsed / 1e9;
+  double elapsed = (curtime() - start) / args->measure_iters;
+  double real_gflops = app_data->dgemm_gflops_ref = dim_to_gflops(dim, elapsed);
 
   printf("Theoretical double GFLOPS: %lf; measured double GFLOPS: %lf\n",
          theo_gflops, real_gflops);
@@ -519,9 +560,32 @@ int main(int argc, char *argv[]) {
       }
     }
   } else {
-    // check dgemm intensity
-    if (!check_dgemm(args)) {
+    FILE *fp = fopen(args->out_file, "w");
+    if (!fp) {
+      perror("open out file");
       goto fail;
+    }
+
+    // allocate performance buffers
+    app_data->dgemm_elapsed = calloc(args->measure_iters, sizeof(double));
+    app_data->types_elapsed = calloc(args->measure_iters, sizeof(double));
+    app_data->types_elapsed_ref = calloc(args->measure_iters, sizeof(double));
+
+    // check dgemm intensity
+    if (!check_dgemm(app_data)) {
+      goto fail;
+    }
+
+    // run reference datatypes
+    for (int i = 0; i < args->measure_iters; ++i) {
+      send_rts(&ctx);
+      double start = curtime();
+      while (!query_once(&ctx, NULL))
+        ;
+      double rtt = curtime() - start;
+      double ref_mbps = rtt_to_mbps(app_data, rtt);
+      app_data->types_elapsed_ref[i] = rtt;
+      printf("Reference datatypes: %lf Mbps\n", ref_mbps);
     }
 
     // tune dgemm size
@@ -530,7 +594,7 @@ int main(int argc, char *argv[]) {
     while (hit < args->tune_num_hits) {
       printf("Running trial dim=%d...\n", dim);
       setup_trial(&ctx, dim);
-      int res = run_trial(&ctx);
+      int res = run_trial(&ctx, -1);
       if (!res) {
         printf("Trial dim=%d hit!\n", dim);
         ++hit;
@@ -544,15 +608,27 @@ int main(int argc, char *argv[]) {
         }
         hit = 0;
       }
-      app_data->dgemm_total = 0;
     }
 
-    // run trial
-    printf("\n==> Tuned trial run:\n");
-    setup_trial(&ctx, dim);
-    run_trial(&ctx);
+    // run overlapping trial
+    for (int i = 0; i < args->measure_iters; ++i) {
+      printf("\n==> Tuned trial run:\n");
+      setup_trial(&ctx, dim);
+      run_trial(&ctx, i);
+    }
 
-    // TODO: write measurements to CSV
+    // write measurements to CSV
+    fprintf(fp, "gflops_theo,gflops_ref,dim,streambuf_size\n");
+    fprintf(fp, "%lf,%lf,%d,%d\n", app_data->dgemm_gflops_theo,
+            app_data->dgemm_gflops_ref, dim, app_data->streambuf_size);
+    fprintf(fp, "\n");
+
+    fprintf(fp, "dgemm,datatypes_ref,datatypes\n");
+    for (int i = 0; i < args->measure_iters; ++i) {
+      fprintf(fp, "%lf,%lf,%lf\n", app_data->dgemm_elapsed[i],
+              app_data->types_elapsed_ref[i], app_data->types_elapsed[i]);
+    }
+    fclose(fp);
   }
 
   // get telemetry from pspin
