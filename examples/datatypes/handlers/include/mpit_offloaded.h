@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 //##### MPITYPES
-#define DDTCHECK
+// #define DDTCHECK
 
 #ifdef DDTCHECK
 #define DDTASSERT(x)                                                           \

@@ -102,7 +102,8 @@ __handler__ void datatypes_hh(handler_args_t *args) {
 
   if (!SYN(flags)) {
     printf("Error: first packet did not require SYN; flags = %#x\n", flags);
-    return;
+    for (;;)
+      ;
   }
 }
 
@@ -121,7 +122,8 @@ __handler__ void datatypes_th(handler_args_t *args) {
 
   if (!EOM(flags)) {
     printf("Error: last packet did not have EOM; flags = %#x\n", flags);
-    return;
+    for (;;)
+      ;
   }
 
   // notify host for unpacked message -- 0-byte host request
