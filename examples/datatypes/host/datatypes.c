@@ -155,6 +155,17 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 }
 
 typedef struct {
+  double rtt;
+  double pkt_cycles;
+  double msg_cycles;
+} datatypes_measure_t;
+static inline double get_cycles(fpspin_ctx_t *ctx, int id) {
+  fpspin_counter_t counter = fpspin_get_counter(ctx, id);
+
+  return (double)counter.sum / counter.count;
+}
+
+typedef struct {
   int file_id;
   struct arguments args;
   uint32_t userbuf_size;
@@ -176,9 +187,9 @@ typedef struct {
   // number of dgemm iterations till datatypes finish
   int *dgemm_iters;
   // measured datatypes rtt without dgemm
-  double *types_elapsed_ref;
+  datatypes_measure_t *types_ref;
   // measured datatypes rtt with dgemm
-  double *types_elapsed;
+  datatypes_measure_t *types;
 
   // RTS socket
   int rts_sockfd;
@@ -288,8 +299,8 @@ static void finish_datatypes_spin(fpspin_ctx_t *ctx) {
   if (args->mode == MODE_BENCHMARK) {
     free(app_data->dgemm_elapsed);
     free(app_data->dgemm_iters);
-    free(app_data->types_elapsed);
-    free(app_data->types_elapsed_ref);
+    free(app_data->types);
+    free(app_data->types_ref);
   }
 
   free(app_data);
@@ -425,6 +436,10 @@ int run_trial(fpspin_ctx_t *ctx, int measure_idx) {
   int dim = app_data->dim;
   int ret = 1;
 
+  // clear counters
+  fpspin_clear_counter(ctx, 0); // pkt
+  fpspin_clear_counter(ctx, 1); // msg
+
   // RTS to sender - start of RTT
   send_rts(ctx);
   double rtt_start = curtime();
@@ -467,7 +482,11 @@ finish:;
   double mbps = rtt_to_mbps(app_data, rtt);
   double gflops = i * dim_to_gflops(dim, dgemm_total);
   if (measure_idx != -1) {
-    app_data->types_elapsed[measure_idx] = rtt;
+    app_data->types[measure_idx] = (datatypes_measure_t){
+        .rtt = rtt,
+        .pkt_cycles = get_cycles(ctx, 0),
+        .msg_cycles = get_cycles(ctx, 1),
+    };
     app_data->dgemm_elapsed[measure_idx] = dgemm_total;
     app_data->dgemm_iters[measure_idx] = i;
   }
@@ -579,8 +598,9 @@ int main(int argc, char *argv[]) {
     // allocate performance buffers
     app_data->dgemm_elapsed = calloc(args->measure_iters, sizeof(double));
     app_data->dgemm_iters = calloc(args->measure_iters, sizeof(int));
-    app_data->types_elapsed = calloc(args->measure_iters, sizeof(double));
-    app_data->types_elapsed_ref = calloc(args->measure_iters, sizeof(double));
+    app_data->types = calloc(args->measure_iters, sizeof(datatypes_measure_t));
+    app_data->types_ref =
+        calloc(args->measure_iters, sizeof(datatypes_measure_t));
 
     // check dgemm intensity
     if (!check_dgemm(app_data)) {
@@ -589,13 +609,20 @@ int main(int argc, char *argv[]) {
 
     // run reference datatypes
     for (int i = 0; i < args->measure_iters; ++i) {
+      fpspin_clear_counter(&ctx, 0); // pkt
+      fpspin_clear_counter(&ctx, 1); // msg
+
       send_rts(&ctx);
       double start = curtime();
       while (!query_once(&ctx, NULL))
         ;
       double rtt = curtime() - start;
       double ref_mbps = rtt_to_mbps(app_data, rtt);
-      app_data->types_elapsed_ref[i] = rtt;
+      app_data->types_ref[i] = (datatypes_measure_t){
+          .rtt = rtt,
+          .pkt_cycles = get_cycles(&ctx, 0),
+          .msg_cycles = get_cycles(&ctx, 1),
+      };
       printf("Reference datatypes: %lf Mbps\n", ref_mbps);
     }
 
@@ -651,11 +678,16 @@ int main(int argc, char *argv[]) {
             app_data->dgemm_gflops_ref, dim, app_data->streambuf_size);
     fprintf(fp, "\n");
 
-    fprintf(fp, "dgemm,iters,datatypes_ref,datatypes\n");
+    fprintf(
+        fp,
+        "dgemm,iters,dt_ref_rtt,dt_ref_pkt,dt_ref_msg,dt_rtt,dt_pkt,dt_msg\n");
     for (int i = 0; i < args->measure_iters; ++i) {
-      fprintf(fp, "%lf,%d,%lf,%lf\n", app_data->dgemm_elapsed[i],
-              app_data->dgemm_iters[i], app_data->types_elapsed_ref[i],
-              app_data->types_elapsed[i]);
+      datatypes_measure_t *dt_ref = &app_data->types_ref[i];
+      datatypes_measure_t *dt = &app_data->types[i];
+      fprintf(fp, "%lf,%d,%lf,%lf,%lf,%lf,%lf,%lf\n",
+              app_data->dgemm_elapsed[i], app_data->dgemm_iters[i], dt_ref->rtt,
+              dt_ref->pkt_cycles, dt_ref->msg_cycles, dt->rtt, dt->pkt_cycles,
+              dt->msg_cycles);
     }
     fclose(fp);
   }
