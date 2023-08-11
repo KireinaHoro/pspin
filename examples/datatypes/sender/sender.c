@@ -111,6 +111,11 @@ typedef struct {
   uint32_t userbuf_size, streambuf_size;
 } buffers_t;
 
+void free_buffers(buffers_t *bufs) {
+  free(bufs->streambuf);
+  free(bufs->userbuf);
+}
+
 buffers_t prepare_buffers(type_info_t *info, struct arguments *args,
                           MPI_Datatype t) {
   // uint32_t rcvbuff_size = info.true_lb + MAX(MAX(info.extent,
@@ -232,6 +237,7 @@ int main(int argc, char *argv[]) {
 
     printf("Golden result written to %s\n", args.out_file);
     fclose(fp);
+    free_buffers(&bufs);
 
     // compile DDT bin to keep in sync -- taken from typebuilder.cc
     MPIT_Type_debug(t);
@@ -317,6 +323,8 @@ int main(int argc, char *argv[]) {
         slmp_sendmsg(&sock, from.sin_addr.s_addr, msgid, bufs.streambuf,
                      bufs.streambuf_size, args.slmp_ipg);
       }
+
+      free_buffers(&bufs);
 
       if (exit_flag) {
         fprintf(stderr, "Received SIGINT, exiting...\n");
