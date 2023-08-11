@@ -276,14 +276,18 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
 
 static void finish_datatypes_spin(fpspin_ctx_t *ctx) {
   datatypes_data_t *app_data = to_data_ptr(ctx);
+  struct arguments *args = &app_data->args;
+
   free(app_data->A);
   free(app_data->B);
   free(app_data->C);
   close(app_data->rts_sockfd);
 
-  free(app_data->dgemm_elapsed);
-  free(app_data->types_elapsed);
-  free(app_data->types_elapsed_ref);
+  if (args->mode == MODE_BENCHMARK) {
+    free(app_data->dgemm_elapsed);
+    free(app_data->types_elapsed);
+    free(app_data->types_elapsed_ref);
+  }
 
   free(app_data);
 
