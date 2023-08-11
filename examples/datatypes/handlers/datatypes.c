@@ -53,10 +53,6 @@
 // 1: per-message cycles
 // TODO: more fine-grained counters?
 
-// we assume we have at most CORE_COUNT message
-#define NUM_MSGS CORE_COUNT
-uint32_t msg_start[NUM_MSGS];
-
 #define SWAP(a, b, type)                                                       \
   do {                                                                         \
     type tmp = a;                                                              \
@@ -96,9 +92,10 @@ __handler__ void datatypes_hh(handler_args_t *args) {
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
 
   int flowid = args->task->flow_id;
+  spin_core_state_t *my_state = &dtmem->state[flowid];
   DEBUG("Start of message #%u\n", flowid);
 
-  msg_start[flowid] = cycles();
+  my_state->msg_start = cycles();
 
   if (!SYN(flags)) {
     printf("Error: first packet did not require SYN; flags = %#x\n", flags);
@@ -116,7 +113,9 @@ __handler__ void datatypes_th(handler_args_t *args) {
   // counter 1: message average time
   // FIXME: should this include the notification time?
   int flowid = args->task->flow_id;
-  push_counter(&__host_data.counters[1], cycles() - msg_start[flowid]);
+  spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
+  spin_core_state_t *my_state = &dtmem->state[flowid];
+  push_counter(&__host_data.counters[1], cycles() - my_state->msg_start);
 
   DEBUG("End of message #%u\n", flowid);
 
