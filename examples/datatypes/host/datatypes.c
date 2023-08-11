@@ -617,6 +617,11 @@ int main(int argc, char *argv[]) {
           printf("Trial dim=%d dgemm too long\n", dim);
           dim -= args->tune_dim_step;
         }
+        if (hit) {
+          // we have hit before, slow down a bit to not miss
+          if (args->tune_dim_step > 1)
+            args->tune_dim_step /= 2;
+        }
         hit = 0;
       }
     }
