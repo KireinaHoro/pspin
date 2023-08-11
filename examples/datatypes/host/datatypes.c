@@ -173,6 +173,8 @@ typedef struct {
   // performance measurements -- arrays of measure_iters
   // measured dgemm time with datatypes
   double *dgemm_elapsed;
+  // number of dgemm iterations till datatypes finish
+  int *dgemm_iters;
   // measured datatypes rtt without dgemm
   double *types_elapsed_ref;
   // measured datatypes rtt with dgemm
@@ -285,6 +287,7 @@ static void finish_datatypes_spin(fpspin_ctx_t *ctx) {
 
   if (args->mode == MODE_BENCHMARK) {
     free(app_data->dgemm_elapsed);
+    free(app_data->dgemm_iters);
     free(app_data->types_elapsed);
     free(app_data->types_elapsed_ref);
   }
@@ -466,6 +469,7 @@ finish:;
   if (measure_idx != -1) {
     app_data->types_elapsed[measure_idx] = rtt;
     app_data->dgemm_elapsed[measure_idx] = dgemm_total;
+    app_data->dgemm_iters[measure_idx] = i;
   }
   printf("DGEMM total: %lf; RTT: %lf\n", dgemm_total, rtt);
   printf("DGEMM %lf GFLOPS, Datatypes %lf Mbps\n", gflops, mbps);
@@ -533,6 +537,8 @@ static void dump_userbuf(fpspin_ctx_t *ctx, uint8_t *msg_buf) {
 }
 
 int main(int argc, char *argv[]) {
+  FILE *fp;
+  int dim;
   fpspin_ctx_t ctx;
   if (setup_datatypes_spin(&ctx, argc, argv))
     goto fail;
@@ -564,7 +570,7 @@ int main(int argc, char *argv[]) {
       }
     }
   } else {
-    FILE *fp = fopen(args->out_file, "w");
+    fp = fopen(args->out_file, "w");
     if (!fp) {
       perror("open out file");
       goto fail;
@@ -572,6 +578,7 @@ int main(int argc, char *argv[]) {
 
     // allocate performance buffers
     app_data->dgemm_elapsed = calloc(args->measure_iters, sizeof(double));
+    app_data->dgemm_iters = calloc(args->measure_iters, sizeof(int));
     app_data->types_elapsed = calloc(args->measure_iters, sizeof(double));
     app_data->types_elapsed_ref = calloc(args->measure_iters, sizeof(double));
 
@@ -593,7 +600,7 @@ int main(int argc, char *argv[]) {
     }
 
     // tune dgemm size
-    int dim = args->tune_dim_start;
+    dim = args->tune_dim_start;
     int hit = 0;
     while (hit < args->tune_num_hits) {
       printf("Running trial dim=%d...\n", dim);
@@ -620,19 +627,6 @@ int main(int argc, char *argv[]) {
       setup_trial(&ctx, dim);
       run_trial(&ctx, i);
     }
-
-    // write measurements to CSV
-    fprintf(fp, "gflops_theo,gflops_ref,dim,streambuf_size\n");
-    fprintf(fp, "%lf,%lf,%d,%d\n", app_data->dgemm_gflops_theo,
-            app_data->dgemm_gflops_ref, dim, app_data->streambuf_size);
-    fprintf(fp, "\n");
-
-    fprintf(fp, "dgemm,datatypes_ref,datatypes\n");
-    for (int i = 0; i < args->measure_iters; ++i) {
-      fprintf(fp, "%lf,%lf,%lf\n", app_data->dgemm_elapsed[i],
-              app_data->types_elapsed_ref[i], app_data->types_elapsed[i]);
-    }
-    fclose(fp);
   }
 
   // get telemetry from pspin
@@ -644,6 +638,22 @@ int main(int argc, char *argv[]) {
          (float)pkt_counter.sum / pkt_counter.count, pkt_counter.count);
   printf("... msg: %f cycles (%d iters)\n",
          (float)msg_counter.sum / msg_counter.count, msg_counter.count);
+
+  if (args->mode == MODE_BENCHMARK) {
+    // write measurements to CSV
+    fprintf(fp, "gflops_theo,gflops_ref,dim,streambuf_size\n");
+    fprintf(fp, "%lf,%lf,%d,%d\n", app_data->dgemm_gflops_theo,
+            app_data->dgemm_gflops_ref, dim, app_data->streambuf_size);
+    fprintf(fp, "\n");
+
+    fprintf(fp, "dgemm,iters,datatypes_ref,datatypes\n");
+    for (int i = 0; i < args->measure_iters; ++i) {
+      fprintf(fp, "%lf,%d,%lf,%lf\n", app_data->dgemm_elapsed[i],
+              app_data->dgemm_iters[i], app_data->types_elapsed_ref[i],
+              app_data->types_elapsed[i]);
+    }
+    fclose(fp);
+  }
 
   finish_datatypes_spin(&ctx);
 
