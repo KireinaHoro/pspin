@@ -18,6 +18,9 @@
 
 #include "../include/datatypes_host.h"
 
+#define EXIT_RETRY 1
+#define EXIT_FATAL 128
+
 struct arguments {
   const char *pspin_dev;
   int dest_ctx;
@@ -558,9 +561,12 @@ static void dump_userbuf(fpspin_ctx_t *ctx, uint8_t *msg_buf) {
 int main(int argc, char *argv[]) {
   FILE *fp;
   int dim;
+  int ret = EXIT_SUCCESS;
   fpspin_ctx_t ctx;
-  if (setup_datatypes_spin(&ctx, argc, argv))
+  if (setup_datatypes_spin(&ctx, argc, argv)) {
+    ret = EXIT_FATAL;
     goto fail;
+  }
   datatypes_data_t *app_data = to_data_ptr(&ctx);
   struct arguments *args = &app_data->args;
 
@@ -573,6 +579,7 @@ int main(int argc, char *argv[]) {
     sigemptyset(&sa.sa_mask);
     if (sigaction(SIGINT, &sa, NULL)) {
       perror("sigaction");
+      ret = EXIT_FATAL;
       goto fail;
     }
 
@@ -592,6 +599,7 @@ int main(int argc, char *argv[]) {
     fp = fopen(args->out_file, "w");
     if (!fp) {
       perror("open out file");
+      ret = EXIT_FATAL;
       goto fail;
     }
 
@@ -604,6 +612,7 @@ int main(int argc, char *argv[]) {
 
     // check dgemm intensity
     if (!check_dgemm(app_data)) {
+      ret = EXIT_RETRY;
       goto fail;
     }
 
@@ -692,11 +701,7 @@ int main(int argc, char *argv[]) {
     fclose(fp);
   }
 
-  finish_datatypes_spin(&ctx);
-
-  return EXIT_SUCCESS;
-
 fail:
   finish_datatypes_spin(&ctx);
-  return EXIT_FAILURE;
+  return ret;
 }

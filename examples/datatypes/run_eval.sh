@@ -52,6 +52,17 @@ do_netns() {
 }
 export -f do_netns
 
+run_with_retry() {
+    retries=5
+    for (( i=retries; i>=1; --i )); do
+        do_netns pspin host/datatypes "$@"
+        if [[ $? != 1 ]]; then
+            break
+        fi
+        echo Retrying...
+    done
+}
+
 # build handlers, host app and sender
 make
 make host sender
@@ -78,7 +89,7 @@ if [[ $do_parallel == 1 ]]; then
 
     # run trials with varying parallelism
     for pm in $trials_par; do
-        do_netns pspin host/datatypes "$count_par.$datatype_bin" \
+        run_with_retry "$count_par.$datatype_bin" \
             -o $data_root/p-$pm.csv \
             -q $bypass \
             -p $pm $tune_opts
@@ -91,7 +102,7 @@ if [[ $do_msg_size == 1 ]]; then
         # compile datatype
         typebuilder/typebuilder "$datatype_str" $ms "$ms.$datatype_bin"
 
-        do_netns pspin host/datatypes "$ms.$datatype_bin" \
+        run_with_retry "$ms.$datatype_bin" \
             -o $data_root/m-$ms.csv \
             -q $bypass \
             -p $par_count $tune_opts
