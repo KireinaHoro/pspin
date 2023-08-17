@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eux
+set -eu
 
 pspin="10.0.0.1"
 bypass="10.0.0.2"
@@ -45,17 +45,12 @@ source ../../sourceme.sh
 # https://stackoverflow.com/a/2173421/5520728
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
-do_netns() {
-    netns=$1
-    shift
-    sudo LD_LIBRARY_PATH=typebuilder/ ip netns exec $netns "$@"
-}
-export -f do_netns
+do_netns="sudo LD_LIBRARY_PATH=typebuilder/ ip netns exec"
 
 run_with_retry() {
     retries=5
     for (( i=retries; i>=1; --i )); do
-        do_netns pspin host/datatypes "$@"
+        $do_netns pspin host/datatypes "$@"
         if [[ $? != 1 ]]; then
             break
         fi
@@ -73,7 +68,7 @@ pushd typebuilder
 popd
 
 # check if netns is correctly setup
-if ! do_netns pspin ip a | grep $pspin; then
+if ! $do_netns pspin ip a | grep $pspin; then
     fatal "PsPIN NIC not found in netns.  Please rerun setup"
 fi
 
