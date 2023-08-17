@@ -16,4 +16,6 @@ host:
 	$(MAKE) -C host/
 sender:
 	$(MAKE) -C sender/
-.PHONY: host sender all
+baseline:
+	$(MAKE) -C baseline/
+.PHONY: host sender baseline all
