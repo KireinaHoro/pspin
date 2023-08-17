@@ -6,7 +6,7 @@
 #include <assert.h>
 
 #include <iostream>
-#include <iomanip> 
+#include <iomanip>
 #include <vector>
 #include <queue>
 #include <list>
@@ -63,7 +63,7 @@ struct Singles {
 struct StructElem {
 	MPI_Aint displ;
 	int blocklen;
-	struct Datatype datatype; 
+	struct Datatype datatype;
 };
 
 struct StructElems {
@@ -126,13 +126,13 @@ vector<struct Datatype> datatypes;
 %%
 
 input:
-| input topdatatype 
+| input topdatatype
 ;
 
 topdatatype:
 datatype {
 	datatypes.insert( datatypes.end(), $1->types.begin(), $1->types.end() );
-	free($1);
+	delete $1;
 }
 ;
 
@@ -282,12 +282,12 @@ CONTIGUOUS '(' range ')' '[' datatype ']' {
 		}
 	}
 
-	free($6);
+	delete $6;
 }
 ;
 
 vector:
-VECTOR '(' range range range ')' '[' datatype ']' { 
+VECTOR '(' range range range ')' '[' datatype ']' {
 	$$ = new Datatypes;
 
 	list<struct Datatype> *subtypes = &($8->types);
@@ -306,7 +306,7 @@ VECTOR '(' range range range ')' '[' datatype ']' {
 		}
 	}
 
-	free($8);
+	delete $8;
 }
 ;
 
@@ -330,7 +330,7 @@ HVECTOR '(' range range range ')' '[' datatype ']' {
 		}
 	}
 
-	free($8);
+	delete $8;
 }
 ;
 
@@ -368,9 +368,9 @@ HINDEXED '(' idxentries ')' '[' datatype ']' {
 	for(int i=0; i<num; i++) {
 		displs[i] = $3->indices[i]->displ;
 		blocklens[i] = $3->indices[i]->blocklen;
-		free($3->indices[i]);
+		delete $3->indices[i];
 	}
-	free($3);
+	delete $3;
 
 	for(list<struct Datatype>::iterator subtype = subtypes->begin();
 		subtype != subtypes->end(); subtype++) {
@@ -381,7 +381,7 @@ HINDEXED '(' idxentries ')' '[' datatype ']' {
 
 	free(displs);
 	free(blocklens);
-	free($6);
+	delete $6;
 }
 ;
 
@@ -406,7 +406,7 @@ singles:
 indexedblock:
 INDEXEDBLOCK '(' val  ':'  singles ')' '[' datatype ']' {
 	$$ = new Datatypes;
- 
+
 	list<struct Datatype> *subtypes = &($8->types);
 	list<struct Datatype> *types = &($$->types);
 
@@ -417,7 +417,7 @@ INDEXEDBLOCK '(' val  ':'  singles ')' '[' datatype ']' {
 	for(int i=0; i<num; i++) {
 		displs[i] = $5->singles[i];
 	}
-	free($5);
+	delete $5;
 
 	for(list<struct Datatype>::iterator subtype = subtypes->begin();
 		subtype != subtypes->end(); subtype++) {
@@ -426,7 +426,7 @@ INDEXEDBLOCK '(' val  ':'  singles ')' '[' datatype ']' {
 		types->push_back(type);
 	}
 
-	free(displs);  
+	free(displs);
 }
 ;
 
@@ -439,14 +439,14 @@ RESIZED '(' pair ')' '[' datatype ']'  {
 
 	int lowerbound = $3.count;
 	int extent = $3.blocklen;
- 
+
 	for(list<struct Datatype>::iterator subtype = subtypes->begin();
 		subtype != subtypes->end(); subtype++) {
 		Datatype type;
 		MPI_Type_create_resized(subtype->mpi, lowerbound, extent, &(type.mpi));
 		types->push_back(type);
 	}
-  
+
 }
 ;
 
@@ -456,7 +456,7 @@ NUM ',' NUM ',' datatype {
 	$$->displ = $1;
 	$$->blocklen = $3;
 	$$->datatype = ($5->types).front();
- 	free($5);
+ 	delete $5;
 }
 ;
 
@@ -481,23 +481,23 @@ STRUCT '(' structelems  ')'  {
 	int *blocklens = (int*)malloc(num * sizeof(int));
 	MPI_Datatype *array_of_types = (MPI_Datatype*)malloc(num * sizeof(MPI_Datatype));
 
- 
+
 	for(int i=0; i<num; i++) {
 		displs[i] = $3->structelems[i]->displ;
 		blocklens[i] = $3->structelems[i]->blocklen;
 		array_of_types[i] = $3->structelems[i]->datatype.mpi;
-		free($3->structelems[i]);
+		delete $3->structelems[i];
 	}
-	free($3);
- 
+	delete $3;
+
 	Datatype type;
 	MPI_Type_create_struct(num, blocklens, displs, array_of_types, &(type.mpi));
 
 	types->push_back(type);
- 
+
   	free(displs);
   	free(blocklens);
-  	free(array_of_types); 
+  	free(array_of_types);
 
 }
 ;
@@ -541,15 +541,15 @@ SUBARRAY '(' triples ')' '[' datatype ']' {
 		sizes[i] = $3->triples[i]->size;
 		subsizes[i] = $3->triples[i]->subsize;
 		starts[i] = $3->triples[i]->start;
-		free($3->triples[i]);
+		delete $3->triples[i];
 	}
-	free($3);
- 
+	delete $3;
+
 
 	for(list<struct Datatype>::iterator subtype = subtypes->begin();
 		subtype != subtypes->end(); subtype++) {
 		Datatype type;
-              
+
 		MPI_Type_create_subarray(ndims, sizes, subsizes, starts, order, subtype->mpi, &(type.mpi));
          	types->push_back(type);
 	}
@@ -564,7 +564,7 @@ SUBARRAY '(' triples ')' '[' datatype ']' {
 
 
 
- 
+
 
 
 %%
