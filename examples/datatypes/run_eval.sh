@@ -2,6 +2,7 @@
 
 set -eu
 
+mpiexec="mpiexec"
 pspin="10.0.0.1"
 bypass="10.0.0.2"
 pspin_utils="$(realpath ../../../../utils)"
@@ -24,8 +25,12 @@ fatal() {
 
 do_parallel=0
 do_msg_size=0
-while getopts "pm" OPTION; do
+do_baseline=0
+while getopts "bpm" OPTION; do
     case $OPTION in
+    b)
+        do_baseline=1
+        ;;
     p)
         do_parallel=1
         ;;
@@ -58,6 +63,20 @@ run_with_retry() {
     done
 }
 
+run_baseline() {
+    echo "Running baseline with args $@ ..."
+    ctrl_port=$(awk -F'[: ]' '{print $6; exit;}' < <($do_netns pspin mpiexec -np 2 -launcher manual -host $pspin,$bypass \
+        -outfile-pattern baseline.%r.out -errfile-pattern baseline.%r.err baseline/datatypes_baseline "$@" |& tee mpiexec.out))
+
+    nohup $do_netns pspin /usr/bin/hydra_pmi_proxy --control-port $pspin:$ctrl_port --rmk user \
+        --launcher manual --demux poll --pgid 0 --retries 10 --usize -2 --proxy-id 0 &> hydra.pspin.out &
+
+    nohup $do_netns bypass /usr/bin/hydra_pmi_proxy --control-port $pspin:$ctrl_port --rmk user \
+        --launcher manual --demux poll --pgid 0 --retries 10 --usize -2 --proxy-id 1 &> hydra.bypass.out &
+
+    wait $(jobs -rp)
+}
+
 # build handlers, host app and sender
 make
 make host sender
@@ -72,11 +91,13 @@ if ! $do_netns pspin ip a | grep $pspin; then
     fatal "PsPIN NIC not found in netns.  Please rerun setup"
 fi
 
-# start stdout capture
-nohup sudo $pspin_utils/cat_stdout.py --dump-files --clean &>/dev/null &
+if [[ $do_baseline == 0 ]]; then
+    # start stdout capture
+    nohup sudo $pspin_utils/cat_stdout.py --dump-files --clean &>/dev/null &
 
-# start sender
-nohup bash -c "do_netns bypass sender/datatypes_sender \"$datatype_str\"" &> sender.out &
+    # start sender
+    nohup $do_netns bypass sender/datatypes_sender "$datatype_str" &> sender.out &
+fi
 
 if [[ $do_parallel == 1 ]]; then
     # compile datatype for parallelism
@@ -84,22 +105,36 @@ if [[ $do_parallel == 1 ]]; then
 
     # run trials with varying parallelism
     for pm in $trials_par; do
-        run_with_retry "$count_par.$datatype_bin" \
-            -o $data_root/p-$pm.csv \
-            -q $bypass \
-            -p $pm $tune_opts
+        if [[ $do_baseline == 0 ]]; then
+            run_with_retry "$count_par.$datatype_bin" \
+                -o $data_root/p-$pm.csv \
+                -q $bypass \
+                -p $pm $tune_opts
+        else
+            run_baseline "$datatype_str" \
+                -o $data_root/bp-$pm.csv \
+                -p $pm -e $count_par
+        fi
     done
 fi
 
 if [[ $do_msg_size == 1 ]]; then
     # run trials with varying message size
     for ms in $trials_count; do
-        # compile datatype
-        typebuilder/typebuilder "$datatype_str" $ms "$ms.$datatype_bin"
+        if [[ $do_baseline == 0 ]]; then
+            # compile datatype
+            typebuilder/typebuilder "$datatype_str" $ms "$ms.$datatype_bin"
 
-        run_with_retry "$ms.$datatype_bin" \
-            -o $data_root/m-$ms.csv \
-            -q $bypass \
-            -p $par_count $tune_opts
+            run_with_retry "$ms.$datatype_bin" \
+                -o $data_root/m-$ms.csv \
+                -q $bypass \
+                -p $par_count $tune_opts
+        else
+            run_baseline "$datatype_str" \
+                -o $data_root/bm-$ms.csv \
+                -p $par_count -e $ms
+        fi
     done
 fi
+
+echo Trial finished!
