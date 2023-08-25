@@ -568,19 +568,19 @@ int main(int argc, char *argv[]) {
   datatypes_data_t *app_data = to_data_ptr(&ctx);
   struct arguments *args = &app_data->args;
 
-  if (args->mode == MODE_VERIFY) {
-    // setup signal handler
-    struct sigaction sa = {
-        .sa_handler = sigint_handler,
-        .sa_flags = 0,
-    };
-    sigemptyset(&sa.sa_mask);
-    if (sigaction(SIGINT, &sa, NULL)) {
-      perror("sigaction");
-      ret = EXIT_FATAL;
-      goto fail;
-    }
+  // setup signal handler
+  struct sigaction sa = {
+      .sa_handler = sigint_handler,
+      .sa_flags = 0,
+  };
+  sigemptyset(&sa.sa_mask);
+  if (sigaction(SIGINT, &sa, NULL)) {
+    perror("sigaction");
+    ret = EXIT_FATAL;
+    goto fail;
+  }
 
+  if (args->mode == MODE_VERIFY) {
     // RTS for one message
     send_rts(&ctx);
 
@@ -621,8 +621,13 @@ int main(int argc, char *argv[]) {
 
       send_rts(&ctx);
       double start = curtime();
-      while (!query_once(&ctx, NULL))
-        ;
+      while (!query_once(&ctx, NULL)) {
+        if (exit_flag) {
+          fprintf(stderr, "Received SIGINT, exiting...\n");
+          ret = EXIT_FAILURE;
+          goto fail;
+        }
+      }
       double rtt = curtime() - start;
       double ref_mbps = rtt_to_mbps(app_data, rtt);
       app_data->types_ref[i] = (datatypes_measure_t){
