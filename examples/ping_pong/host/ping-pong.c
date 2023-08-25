@@ -70,7 +70,8 @@ int main(int argc, char *argv[]) {
   fpspin_ctx_t ctx;
   fpspin_ruleset_t rs;
   fpspin_ruleset_udp(&rs);
-  if (!fpspin_init(&ctx, PSPIN_DEV, __IMG__, dest_ctx, &rs, 1)) {
+  if (!fpspin_init(&ctx, PSPIN_DEV, __IMG__, dest_ctx, &rs, 1,
+                   FPSPIN_HOSTDMA_PAGES_DEFAULT)) {
     fprintf(stderr, "failed to initialise fpspin\n");
     goto fail;
   }

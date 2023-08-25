@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "../include/datatypes_host.h"
+#include "fpspin/fpspin.h"
 
 #define EXIT_RETRY 1
 #define EXIT_FATAL 128
@@ -246,13 +247,9 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
 
   fpspin_ruleset_t rs;
   fpspin_ruleset_slmp(&rs);
-  if (!fpspin_init(ctx, args->pspin_dev, __IMG__, args->dest_ctx, &rs, 1)) {
+  if (!fpspin_init(ctx, args->pspin_dev, __IMG__, args->dest_ctx, &rs, 1,
+                   FPSPIN_HOSTDMA_PAGES_DEFAULT + MSG_PAGES)) {
     fprintf(stderr, "failed to initialise fpspin\n");
-    return -1;
-  }
-
-  if (ctx->mmap_len < PAGE_SIZE * (MSG_PAGES + NUM_HPUS)) {
-    fprintf(stderr, "host dma area too small\n");
     return -1;
   }
 
