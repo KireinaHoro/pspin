@@ -26,8 +26,8 @@
 #include "pspin_rt.h"
 #include "spin_conf.h"
 
-#define SIZE_MSG (128 * 1024 * 1024) // 128 MB
-#define MSG_PAGES (SIZE_MSG / PAGE_SIZE)
+#define SIZE_MSG (8 * 1024 * 1024) // 8 MB
+#define MSG_PAGES (SIZE_MSG / PAGE_SIZE) * CORE_COUNT
 
 // #define DATATYPES_DEBUG
 
@@ -160,7 +160,10 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   spin_core_state_t *my_state = &dtmem->state[flowid];
   my_state->params.streambuf = (void *)slmp_pld;
   // first CORE_COUNT pages are for the req/resp interface
-  my_state->params.userbuf = HOST_ADDR(args) + CORE_COUNT * PAGE_SIZE;
+  my_state->params.userbuf =
+      HOST_ADDR(args) + (CORE_COUNT + flowid * MSG_PAGES) * PAGE_SIZE;
+  // FIXME: should check that userbuf writes do not exceed MSG_PAGES
+
   uint64_t last = stream_end_offset;
 
   int time = cycles();

@@ -46,8 +46,8 @@ struct arguments {
   const char *type_descr_file;
 };
 
-#define SIZE_MSG (128 * 1024 * 1024) // 128 MB
-#define MSG_PAGES (SIZE_MSG / PAGE_SIZE)
+#define SIZE_MSG (8 * 1024 * 1024)                  // 8 MB per message
+#define MSG_PAGES (SIZE_MSG / PAGE_SIZE) * NUM_HPUS // disjoint for each HPU
 
 static char doc[] =
     "Datatypes receiver host program -- verify or benchmark "
@@ -350,7 +350,8 @@ static bool query_once(fpspin_ctx_t *ctx, msg_handler_t func) {
 
     // write received message to file
     // we have fixed size userbuf from datatypes desc
-    uint8_t *msg_buf = (uint8_t *)ctx->cpu_addr + NUM_HPUS * PAGE_SIZE;
+    uint8_t *msg_buf =
+        (uint8_t *)ctx->cpu_addr + (NUM_HPUS + msgid * MSG_PAGES) * PAGE_SIZE;
 
     if (func) {
       func(ctx, msg_buf);
