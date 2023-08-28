@@ -180,6 +180,7 @@ int main(int argc, char *argv[]) {
   // buffer size from typetester.cc
   type_info_t info;
   get_datatype_info(t, &(info));
+  uint32_t streambuf_size = args.num_elements * info.size;
 
   // initialise MPITypes
   MPIT_Type_init(t);
@@ -220,9 +221,9 @@ int main(int argc, char *argv[]) {
   }
 
   if (fp) {
-    fprintf(fp, "elements,parallel,types_str\n");
-    fprintf(fp, "%d,%d,\"%s\"\n\n", args.num_elements, args.num_parallel,
-            args.type_descr_str);
+    fprintf(fp, "elements,parallel,streambuf_size,types_str\n");
+    fprintf(fp, "%d,%d,%d,\"%s\"\n\n", args.num_elements, args.num_parallel,
+            streambuf_size, args.type_descr_str);
     fprintf(fp, "elapsed\n");
     for (int i = 0; i < args.num_iterations; ++i) {
       fprintf(fp, "%lf\n", elapsed[i]);
