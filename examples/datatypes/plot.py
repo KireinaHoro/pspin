@@ -32,13 +32,16 @@ pspin_freq = 40e6 # 40 MHz
 parallel_pkl = 'parallel.pkl'
 msg_size_pkl = 'msg_size.pkl'
 
-dgemm_theo_label = 'DGEMM Theoretical'
-dgemm_ref_label = 'DGEMM Reference'
-dgemm_overlap_label = 'DGEMM Overlap'
+dgemm_theo_label = 'GEMM Theoretical'
+dgemm_ref_label = 'GEMM Reference'
+dgemm_overlap_label = 'GEMM Overlap'
 
-dt_theo_label = 'Datatypes MPICH'
+dt_mpich_vanilla_label = 'Datatypes MPICH/Corundum'
+dt_mpich_fpspin_label = 'Datatypes MPICH/FPsPIN'
 dt_ref_label = 'Datatypes Reference'
 dt_overlap_label = 'Datatypes Overlap'
+
+iperf_vanilla = 'IPerf/Corundum'
 
 def consume_trials(key, full_key, trials, num_parallel_func):
     # https://stackoverflow.com/a/42837693/5520728
@@ -51,56 +54,89 @@ def consume_trials(key, full_key, trials, num_parallel_func):
         })
         data = pd.concat([data, entry], ignore_index=True)
 
+    if key == 'i':
+        # iperf theoretical data
+        iperf_dat = [9.22, 10.4, 8.36, 8.49, 7.75, 8.66, 7.63, 8.60, 8.70, 7.89, 7.92, 8.16, 7.87, 8.07, 7.31, 7.78]
+        for par, gbps in enumerate(iperf_dat):
+            append_row(par + 1, iperf_vanilla, gbps * 1000)
+        return
+
     for t in trials:
-        if m := re.match(key + r'-([0-9]+)\.csv', t):
+        base_regex = key + r'-([0-9]+)\.csv'
+        baseline = False
+        if m := re.match(base_regex, t):
             val = m.group(1)
+        elif m := re.match('b' + base_regex, t):
+            val = m.group(1)
+            baseline = True
+            vanilla = False
+        elif m := re.match('v' + base_regex, t):
+            val = m.group(1)
+            baseline = True
+            vanilla = True
         else:
             continue
+        val = float(val)
 
-        num_parallel = num_parallel_func(float(val))
-
-        with open(join(args.data_root, t), 'r') as f:
+        fname = join(args.data_root, t)
+        print(f'Consuming {fname}')
+        with open(fname, 'r') as f:
             reader = csv.reader(f)
-            assert next(reader) == ['gflops_theo', 'gflops_ref', 'dim', 'streambuf_size']
-            tg, rg, dim, sbuf_size = [float(x) for x in next(reader)]
-            num_packets = ceil(sbuf_size / slmp_payload_size)
+            if baseline:
+                # MPICH
+                label = dt_mpich_vanilla_label if vanilla else dt_mpich_fpspin_label 
+                assert next(reader) == ['elements', 'parallel', 'streambuf_size', 'types_str']
+                *params, types_str = next(reader)
+                elem, par, sbuf_size = map(int, params)
 
-            append_row(val, dgemm_theo_label, tg)
-            # dgemm w/o dt
-            append_row(val, dgemm_ref_label, rg)
-            assert next(reader) == []
+                assert next(reader) == []
+                assert next(reader) == ['elapsed']
+                for dat in reader:
+                    elapsed, = map(float, dat)
 
-            assert next(reader) == ['dgemm', 'iters', 'dt_ref_rtt',
-                                    'dt_ref_pkt', 'dt_ref_msg', 'dt_rtt', 'dt_pkt', 'dt_msg']
-            for data_tuple in reader:
-                # dgemm w/ dt, dt w/o dgemm, dt w/ dgemm
-                # RTT in float seconds
-                dgemm_overlap, dgemm_iter, dt_ref_rtt, dt_ref_pkt, dt_ref_msg, dt_rtt, dt_pkt, dt_msg = map(float, data_tuple)
-                dt_pkt *= num_packets
-                dt_ref_pkt *= num_packets
+                    append_row(val, label, rtt_to_mbps(sbuf_size, par, elapsed))
 
-                append_row(val, dgemm_overlap_label, dim_to_gflops(dim, dgemm_iter, dgemm_overlap))
-                append_row(val, dt_ref_label, rtt_to_mbps(sbuf_size, num_parallel, dt_ref_rtt))
-                append_row(val, 'dt_ref_rtt_us', dt_ref_rtt * 1e6)
-                append_row(val, 'dt_ref_pkt_us', cycles_to_us(dt_ref_pkt))
-                append_row(val, 'dt_ref_msg_us', cycles_to_us(dt_ref_msg))
-                append_row(val, dt_overlap_label, rtt_to_mbps(sbuf_size, num_parallel, dt_rtt))
-                append_row(val, 'dt_overlap_rtt_us', dt_rtt * 1e6)
-                append_row(val, 'dt_overlap_pkt_us', cycles_to_us(dt_pkt))
-                append_row(val, 'dt_overlap_msg_us', cycles_to_us(dt_msg))
+            else:
+                num_parallel = num_parallel_func(val)
 
-                # use KB message sizes
-                overlap_key = sbuf_size / 1000 if key == 'm' else val
-                    
-                append_row(overlap_key, 'overlap', dgemm_overlap / dt_rtt)
+                assert next(reader) == ['gflops_theo', 'gflops_ref', 'dim', 'streambuf_size']
+                tg, rg, dim, sbuf_size = [float(x) for x in next(reader)]
+                num_packets = ceil(sbuf_size / slmp_payload_size)
 
-    # TODO: MPICH + vanilla Corundum data
-    append_row(0, dt_theo_label, 20000) # dummy data of 20 Gbps
+                append_row(val, dgemm_theo_label, tg)
+                # dgemm w/o dt
+                append_row(val, dgemm_ref_label, rg)
+                assert next(reader) == []
+
+                assert next(reader) == ['dgemm', 'iters', 'dt_ref_rtt',
+                                        'dt_ref_pkt', 'dt_ref_msg', 'dt_rtt', 'dt_pkt', 'dt_msg']
+                for data_tuple in reader:
+                    # dgemm w/ dt, dt w/o dgemm, dt w/ dgemm
+                    # RTT in float seconds
+                    dgemm_overlap, dgemm_iter, dt_ref_rtt, dt_ref_pkt, dt_ref_msg, dt_rtt, dt_pkt, dt_msg = map(float, data_tuple)
+                    dt_pkt *= num_packets
+                    dt_ref_pkt *= num_packets
+
+                    append_row(val, dgemm_overlap_label, dim_to_gflops(dim, dgemm_iter, dgemm_overlap))
+                    append_row(val, dt_ref_label, rtt_to_mbps(sbuf_size, num_parallel, dt_ref_rtt))
+                    append_row(val, 'dt_ref_rtt_us', dt_ref_rtt * 1e6)
+                    append_row(val, 'dt_ref_pkt_us', cycles_to_us(dt_ref_pkt))
+                    append_row(val, 'dt_ref_msg_us', cycles_to_us(dt_ref_msg))
+                    append_row(val, dt_overlap_label, rtt_to_mbps(sbuf_size, num_parallel, dt_rtt))
+                    append_row(val, 'dt_overlap_rtt_us', dt_rtt * 1e6)
+                    append_row(val, 'dt_overlap_pkt_us', cycles_to_us(dt_pkt))
+                    append_row(val, 'dt_overlap_msg_us', cycles_to_us(dt_msg))
+
+                    # use KB message sizes
+                    overlap_key = sbuf_size / 1000 if key == 'm' else val
+                        
+                    append_row(overlap_key, 'overlap', dgemm_overlap / dt_rtt)
 
 if args.data_root:
     trials = [f for f in listdir(args.data_root) if isfile(join(args.data_root, f))]
     data = pd.DataFrame(columns=['parallelism', 'type', 'value'])
     consume_trials('p', 'parallelism', trials, lambda x: x) # num_parallel is the key value
+    consume_trials('i', 'parallelism', None, None)
     data.to_pickle(parallel_pkl)
 
     data = pd.DataFrame(columns=['msg_size', 'type', 'value'])
@@ -109,6 +145,7 @@ if args.data_root:
 
 import altair as alt
 from altair import datum
+from altair_saver import save
 
 data_par = pd.read_pickle(parallel_pkl)
 base = alt.Chart(data_par)
@@ -118,7 +155,7 @@ parallel_title = 'Degree of Parallelism'
 # plot 1: dgemm tput & dt bw over parallelism
 bw_title = 'Datatypes Bandwidth (Mbps)'
 bw_base = base.transform_filter(
-    (datum.type == dt_ref_label) | (datum.type == dt_overlap_label)
+    alt.FieldOneOfPredicate(field='type', oneOf=[dt_ref_label, dt_overlap_label, dt_mpich_fpspin_label, dt_mpich_vanilla_label])
 )
 bw_mean = bw_base.mark_line().encode(
     x=alt.X('parallelism').title(''),
@@ -131,10 +168,10 @@ bw_err = bw_base.mark_errorbar(extent='stdev').encode(
     color='type'
 )
 bw_theo = base.mark_rule(strokeWidth=2).encode(
-    y='value',
+    y='mean(value)',
     strokeDash='type'
 ).transform_filter(
-    (datum.type == dt_theo_label)
+    (datum.type == iperf_vanilla)
 )
 
 bw_chart = (bw_mean + bw_err + bw_theo).properties(width=400, height=150)
@@ -142,7 +179,7 @@ bw_chart = (bw_mean + bw_err + bw_theo).properties(width=400, height=150)
 tput_base = base.transform_filter(
     (datum.type == dgemm_ref_label) | (datum.type == dgemm_overlap_label)
 )
-tput_title = 'DGEMM Throughput (GFLOPS)'
+tput_title = 'GEMM Throughput (GFLOPS)'
 tput_mean = tput_base.mark_line().encode(
     x=alt.X('parallelism').title(parallel_title),
     y=alt.Y('mean(value)').title(tput_title).scale(domain=[80,250]),
@@ -192,6 +229,7 @@ overlap_err = overlap_base.mark_errorbar(extent='stdev').encode(
 
 (overlap_avg + overlap_err).properties(width=400, height=200).save('plot2.json')
 
+# plot 2.1: overlapping ratio, x=parallelism
 base = alt.Chart(data_par)
 
 overlap_title = 'Overlap'
