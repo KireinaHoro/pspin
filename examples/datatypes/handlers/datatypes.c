@@ -161,7 +161,7 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   my_state->params.streambuf = (void *)slmp_pld;
   // first CORE_COUNT pages are for the req/resp interface
   my_state->params.userbuf =
-      HOST_ADDR(args) + (CORE_COUNT + flowid * MSG_PAGES) * PAGE_SIZE;
+      HOST_ADDR(args) + CORE_COUNT * PAGE_SIZE + flowid * SIZE_MSG;
   // FIXME: should check that userbuf writes do not exceed MSG_PAGES
 
   uint64_t last = stream_end_offset;

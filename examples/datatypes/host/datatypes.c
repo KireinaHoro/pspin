@@ -266,6 +266,12 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
                          &nic_buffer_size, &app_data->num_elements,
                          &app_data->userbuf_size, &app_data->streambuf_size);
   printf("Userbuf size: %d\n", app_data->userbuf_size);
+  if (app_data->userbuf_size > SIZE_MSG) {
+    fprintf(stderr, "Host DMA message buffer too small!  %#x vs %#x\n",
+            SIZE_MSG, app_data->userbuf_size);
+    free(datatype_mem_ptr_raw);
+    return -1;
+  }
   printf("Streambuf size: %d\n", app_data->streambuf_size);
   if (!nic_buffer_size) {
     // ddt remap failed
@@ -350,8 +356,8 @@ static bool query_once(fpspin_ctx_t *ctx, msg_handler_t func) {
 
     // write received message to file
     // we have fixed size userbuf from datatypes desc
-    uint8_t *msg_buf =
-        (uint8_t *)ctx->cpu_addr + (NUM_HPUS + msgid * MSG_PAGES) * PAGE_SIZE;
+    uint8_t *msg_buf = (uint8_t *)ctx->cpu_addr + NUM_HPUS * PAGE_SIZE +
+                       (msgid % NUM_HPUS) * SIZE_MSG;
 
     if (func) {
       func(ctx, msg_buf);
@@ -662,6 +668,11 @@ int main(int argc, char *argv[]) {
             args->tune_dim_step /= 2;
         }
         hit = 0;
+      }
+      if (exit_flag) {
+        fprintf(stderr, "Received SIGINT, exiting...\n");
+        ret = EXIT_FAILURE;
+        goto fail;
       }
     }
 
