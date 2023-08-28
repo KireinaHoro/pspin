@@ -436,6 +436,8 @@ void send_rts(fpspin_ctx_t *ctx) {
          rts.elem_count, rts.num_parallel_msgs);
 }
 
+int poll_all(fpspin_ctx_t *ctx, msg_handler_t func);
+
 // return value: -1 if dgemm too long, 1 if too short; 0 if right on time
 int run_trial(fpspin_ctx_t *ctx, int measure_idx) {
   datatypes_data_t *app_data = to_data_ptr(ctx);
@@ -468,7 +470,7 @@ int run_trial(fpspin_ctx_t *ctx, int measure_idx) {
       } else {
         // dgemm too long / datatypes too fast
         printf("Dgemm too long! i=%d\n", i);
-        ret = -1;
+        ret = 2;
         goto finish;
       }
     }
@@ -477,8 +479,12 @@ int run_trial(fpspin_ctx_t *ctx, int measure_idx) {
   printf("Dgemm too short!\n");
 
   // too slow - fetch the message and return
-  while (!query_once(ctx, NULL))
-    ;
+  if ((ret = poll_all(ctx, NULL))) {
+    ret = -ret;
+    // skip results calculation
+    return ret;
+  }
+
   app_data->num_received = 0;
   ret = 1;
 
@@ -545,6 +551,21 @@ bool check_dgemm(datatypes_data_t *app_data) {
 volatile sig_atomic_t exit_flag = 0;
 static void sigint_handler(int signum) { exit_flag = 1; }
 
+int poll_all(fpspin_ctx_t *ctx, msg_handler_t func) {
+  int poll_tries = 1000000;
+  while (!query_once(ctx, func)) {
+    if (exit_flag) {
+      fprintf(stderr, "Received SIGINT, exiting...\n");
+      return EXIT_FATAL;
+    }
+    if (!--poll_tries) {
+      fprintf(stderr, "Tries exhausted for poll; please retry\n");
+      return EXIT_RETRY;
+    }
+  }
+  return 0;
+}
+
 static void dump_userbuf(fpspin_ctx_t *ctx, uint8_t *msg_buf) {
   datatypes_data_t *app_data = to_data_ptr(ctx);
   FILE *fp = fopen(app_data->args.out_file, "wb");
@@ -591,14 +612,7 @@ int main(int argc, char *argv[]) {
     send_rts(&ctx);
 
     // receive one message and exit
-    while (true) {
-      if (query_once(&ctx, &dump_userbuf))
-        break;
-      if (exit_flag) {
-        fprintf(stderr, "Received SIGINT, exiting...\n");
-        break;
-      }
-    }
+    ret = poll_all(&ctx, dump_userbuf);
   } else {
     fp = fopen(args->out_file, "w");
     if (!fp) {
@@ -627,12 +641,8 @@ int main(int argc, char *argv[]) {
 
       send_rts(&ctx);
       double start = curtime();
-      while (!query_once(&ctx, NULL)) {
-        if (exit_flag) {
-          fprintf(stderr, "Received SIGINT, exiting...\n");
-          ret = EXIT_FAILURE;
-          goto fail;
-        }
+      if ((ret = poll_all(&ctx, NULL))) {
+        goto fail;
       }
       double rtt = curtime() - start;
       double ref_mbps = rtt_to_mbps(app_data, rtt);
@@ -655,12 +665,15 @@ int main(int argc, char *argv[]) {
         printf("Trial dim=%d hit!\n", dim);
         ++hit;
       } else {
-        if (res > 0) {
+        if (res == 1) {
           printf("Trial dim=%d dgemm too short\n", dim);
           dim += args->tune_dim_step;
-        } else {
+        } else if (res == 2) {
           printf("Trial dim=%d dgemm too long\n", dim);
           dim -= args->tune_dim_step;
+        } else {
+          ret = -res;
+          goto fail;
         }
         if (hit) {
           // we have hit before, slow down a bit to not miss
@@ -671,7 +684,7 @@ int main(int argc, char *argv[]) {
       }
       if (exit_flag) {
         fprintf(stderr, "Received SIGINT, exiting...\n");
-        ret = EXIT_FAILURE;
+        ret = EXIT_FATAL;
         goto fail;
       }
     }
@@ -680,8 +693,13 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < args->measure_iters; ++i) {
       printf("\n==> Tuned trial run:\n");
       setup_trial(&ctx, dim);
-      run_trial(&ctx, i);
+      if ((ret = run_trial(&ctx, i)) < 0) {
+        ret = -ret;
+        goto fail;
+      }
     }
+
+    ret = 0;
   }
 
   // get telemetry from pspin

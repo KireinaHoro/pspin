@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eu
+set -eux
 
 mpiexec="mpiexec"
 pspin="10.0.0.1"
@@ -15,8 +15,8 @@ datatype_str="hvec(2 1 18432)[hvec(2 1 12288)[hvec(2 1 6144)[vec(32 6 8)[ctg(18)
 datatype_bin="ddt.bin"
 
 # 60% peak GEMM validation, allow up to 5 misses, require 5 hits
-# start with dim=1100, poll 20 times per iteration
-tune_opts="-g 0.6 -m 5 -h 5 -b 1100 -i 20"
+# start with dim=1500, poll 20 times per iteration
+tune_opts="-g 0.6 -m 5 -h 5 -b 1500 -i 20"
 
 fatal() {
     echo "$@" >&2
@@ -26,7 +26,8 @@ fatal() {
 do_parallel=0
 do_msg_size=0
 do_baseline=0
-while getopts "bpm" OPTION; do
+vanilla_corundum=0
+while getopts "bpmv" OPTION; do
     case $OPTION in
     b)
         do_baseline=1
@@ -36,6 +37,9 @@ while getopts "bpm" OPTION; do
         ;;
     m)
         do_msg_size=1
+        ;;
+    v)
+        vanilla_corundum=1
         ;;
     *)
         fatal "Incorrect options provided"
@@ -53,6 +57,7 @@ trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 do_netns="sudo LD_LIBRARY_PATH=typebuilder/ ip netns exec"
 
 run_with_retry() {
+    set +e
     retries=5
     for (( i=retries; i>=1; --i )); do
         $do_netns pspin host/datatypes "$@"
@@ -61,6 +66,7 @@ run_with_retry() {
         fi
         echo Retrying...
     done
+    set -e
 }
 
 run_baseline() {
@@ -77,9 +83,9 @@ run_baseline() {
     wait $(jobs -rp)
 }
 
-# build handlers, host app and sender
+# build all
 make
-make host sender
+make host sender baseline
 
 # compile typebuilder
 pushd typebuilder
@@ -99,6 +105,12 @@ if [[ $do_baseline == 0 ]]; then
     nohup $do_netns bypass sender/datatypes_sender "$datatype_str" &> sender.out &
 fi
 
+if [[ $vanilla_corundum == 0 ]]; then
+    key=b
+else
+    key=v
+fi
+
 if [[ $do_parallel == 1 ]]; then
     # compile datatype for parallelism
     typebuilder/typebuilder "$datatype_str" $count_par "$count_par.$datatype_bin"
@@ -112,7 +124,7 @@ if [[ $do_parallel == 1 ]]; then
                 -p $pm $tune_opts
         else
             run_baseline "$datatype_str" \
-                -o $data_root/bp-$pm.csv \
+                -o $data_root/${key}p-$pm.csv \
                 -p $pm -e $count_par
         fi
     done
@@ -131,7 +143,7 @@ if [[ $do_msg_size == 1 ]]; then
                 -p $par_count $tune_opts
         else
             run_baseline "$datatype_str" \
-                -o $data_root/bm-$ms.csv \
+                -o $data_root/${key}m-$ms.csv \
                 -p $par_count -e $ms
         fi
     done
