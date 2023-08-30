@@ -10,3 +10,6 @@
 [submodule "hw/deps/axi_riscv_atomics"]
 	path = hw/deps/axi_riscv_atomics
 	url = https://github.com/pulp-platform/axi_riscv_atomics
+[submodule "examples/udp_ping/deps/stping"]
+	path = examples/udp_ping/deps/stping
+	url = git@github.com:KireinaHoro/stping

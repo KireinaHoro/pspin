@@ -18,30 +18,12 @@
 #include <spin_dma.h>
 #include <spin_host.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #if !defined(FROM_L2) && !defined(FROM_L1)
 #define FROM_L1
 #endif
 
-// #define DEBUG(...) printf(__VA_ARGS__)
 #define DEBUG(...)
-
-// FIXME: only for ICMP echo
-typedef struct {
-  uint8_t type;
-  uint8_t code;
-  uint16_t checksum;
-  uint32_t rest_of_header;
-} icmp_hdr_t;
-
-typedef struct {
-  eth_hdr_t eth_hdr;
-  ip_hdr_t ip_hdr; // FIXME: assumes ihl=4
-  icmp_hdr_t icmp_hdr;
-} __attribute__((__packed__)) hdr_t;
+// #define DEBUG(...) printf(__VA_ARGS__)
 
 __handler__ void pingpong_ph(handler_args_t *args) {
   // counter 2: estimate latency of cycles()
@@ -49,12 +31,12 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   uint32_t start = cycles();
   push_counter(&__host_data.counters[2], start - start_cycles);
 
-  DEBUG("Packet @ %p (L2: %p) (size %d) flow_id %d\n", args->task->pkt_mem,
+  DEBUG("Packet @ %p (L2: %p) (size %d) flow_id %d \n", args->task->pkt_mem,
         args->task->l2_pkt_mem, args->task->pkt_mem_size, args->task->flow_id);
 
   task_t *task = args->task;
 
-  hdr_t *hdrs = (hdr_t *)(task->pkt_mem);
+  pkt_hdr_t *hdrs = (pkt_hdr_t *)(task->pkt_mem);
   uint16_t pkt_len = args->task->pkt_mem_size;
 #ifdef FROM_L2
   uint8_t *nic_pld_addr = ((uint8_t *)(task->l2_pkt_mem));
@@ -62,7 +44,6 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   uint8_t *nic_pld_addr = ((uint8_t *)(task->pkt_mem));
 #endif
 
-  // ICMP ping: swap MAC and IP address
   mac_addr_t src_mac = hdrs->eth_hdr.src;
   hdrs->eth_hdr.src = hdrs->eth_hdr.dest;
   hdrs->eth_hdr.dest = src_mac;
@@ -70,6 +51,10 @@ __handler__ void pingpong_ph(handler_args_t *args) {
   uint32_t src_id = hdrs->ip_hdr.source_id;
   hdrs->ip_hdr.source_id = hdrs->ip_hdr.dest_id;
   hdrs->ip_hdr.dest_id = src_id;
+
+  uint16_t src_port = hdrs->udp_hdr.src_port;
+  hdrs->udp_hdr.src_port = hdrs->udp_hdr.dst_port;
+  hdrs->udp_hdr.dst_port = src_port;
 
   spin_cmd_t dma;
   fpspin_flag_t flag_from_host;
@@ -95,14 +80,6 @@ __handler__ void pingpong_ph(handler_args_t *args) {
 
     DEBUG("DMA roundtrip finished, packet from host size: %d\n", host_pkt_len);
     pkt_len = host_pkt_len;
-  } else {
-    // calculate ICMP checksum ourselves
-    uint16_t ip_len = ntohs(hdrs->ip_hdr.length);
-    uint16_t icmp_len = ip_len - sizeof(ip_hdr_t);
-    hdrs->icmp_hdr.type = 0; // Echo-Reply
-    hdrs->icmp_hdr.checksum = 0;
-    hdrs->icmp_hdr.checksum = ip_checksum((uint8_t *)&hdrs->icmp_hdr, icmp_len);
-    pkt_len = ip_len + sizeof(eth_hdr_t);
   }
 
   spin_cmd_t put;

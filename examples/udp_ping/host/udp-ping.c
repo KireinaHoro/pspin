@@ -23,8 +23,9 @@ struct arguments {
   int expect_second;
 };
 
-static char doc[] = "ICMP ping-pong server host program\vResponds to ICMP Echo "
-                    "messages in FPsPIN.  See the thesis for more information.";
+static char doc[] = "UDP ping-pong server host program\vResponds to UDP "
+                    "packets as ping-pong in FPsPIN, by sending the original "
+                    "payload back.  See the thesis for more information.";
 
 static struct argp_option options[] = {
     {"device", 'd', "DEV_FILE", 0, "pspin device file"},
@@ -60,22 +61,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   return 0;
 }
 
+#define PSPIN_DEV "/dev/pspin0"
+
 volatile sig_atomic_t exit_flag = 0;
 static void sigint_handler(int signum) { exit_flag = 1; }
-
-// FIXME: only for ICMP echo
-typedef struct {
-  uint8_t type;
-  uint8_t code;
-  uint16_t checksum;
-  uint32_t rest_of_header;
-} icmp_hdr_t;
-
-typedef struct {
-  eth_hdr_t eth_hdr;
-  ip_hdr_t ip_hdr; // FIXME: assumes ihl=4
-  icmp_hdr_t icmp_hdr;
-} __attribute__((__packed__)) hdr_t;
 
 // http://www.microhowto.info/howto/calculate_an_internet_protocol_checksum_in_c.html
 uint16_t ip_checksum(void *vdata, size_t length) {
@@ -109,23 +98,6 @@ uint16_t ip_checksum(void *vdata, size_t length) {
   return htons(~acc);
 }
 
-void ruleset_icmp_echo(fpspin_ruleset_t *rs) {
-  assert(NUM_RULES_PER_RULESET == 4);
-  *rs = (fpspin_ruleset_t){
-      .mode = FPSPIN_MODE_AND,
-      .r =
-          {
-              FPSPIN_RULE_IP,
-              FPSPIN_RULE_IP_PROTO(1), // ICMP
-              ((struct fpspin_rule){.idx = 8,
-                                    .mask = 0xff00,
-                                    .start = 0x0800,
-                                    .end = 0x0800}), // ICMP Echo-Request
-              FPSPIN_RULE_FALSE,                     // never EOM
-          },
-  };
-}
-
 static inline double get_cycles(fpspin_ctx_t *ctx, int id) {
   fpspin_counter_t counter = fpspin_get_counter(ctx, id);
 
@@ -138,7 +110,7 @@ int main(int argc, char *argv[]) {
       .dest_ctx = 0,
   };
   static struct argp argp = {options, parse_opt, NULL, doc};
-  argp_program_version = "icmp-ping 1.0";
+  argp_program_version = "udp-ping 1.0";
   argp_program_bug_address = "Pengcheng Xu <pengxu@ethz.ch>";
 
   if (argp_parse(&argp, argc, argv, 0, 0, &args)) {
@@ -175,9 +147,8 @@ int main(int argc, char *argv[]) {
 
   fpspin_ctx_t ctx;
   fpspin_ruleset_t rs;
-  // custom ruleset
-  ruleset_icmp_echo(&rs);
-  if (!fpspin_init(&ctx, args.pspin_dev, __IMG__, args.dest_ctx, &rs, 1,
+  fpspin_ruleset_udp(&rs);
+  if (!fpspin_init(&ctx, PSPIN_DEV, __IMG__, args.dest_ctx, &rs, 1,
                    FPSPIN_HOSTDMA_PAGES_DEFAULT)) {
     fprintf(stderr, "failed to initialise fpspin\n");
     goto fail;
@@ -206,24 +177,30 @@ int main(int argc, char *argv[]) {
 
       if (!(pkt_addr = fpspin_pop_req(&ctx, i, &flag_to_host)))
         continue;
-      volatile hdr_t *hdrs = (hdr_t *)pkt_addr;
-      uint16_t ip_len = ntohs(hdrs->ip_hdr.length);
-      uint16_t eth_len = sizeof(eth_hdr_t) + ip_len;
-      uint16_t flag_len = flag_to_host.len;
-      if (flag_len < eth_len) {
-        printf("Warning: packet truncated; received %d, expected %d (from IP "
-               "header)\n",
-               flag_len, eth_len);
-      }
+      volatile pkt_hdr_t *hdrs = (pkt_hdr_t *)pkt_addr;
+      volatile uint8_t *payload = (uint8_t *)hdrs + sizeof(pkt_hdr_t);
 
-      // ICMP type and checksum
-      size_t icmp_len = ip_len - sizeof(ip_hdr_t);
-      hdrs->icmp_hdr.type = 0; // Echo-Reply
-      hdrs->icmp_hdr.checksum = 0;
-      hdrs->icmp_hdr.checksum =
-          ip_checksum((uint8_t *)&hdrs->icmp_hdr, icmp_len);
+      // uint16_t dma_len = FLAG_LEN(flag_to_host);
+      uint16_t udp_len = ntohs(hdrs->udp_hdr.length);
+      uint16_t payload_len = udp_len - sizeof(udp_hdr_t);
 
-      fpspin_push_resp(&ctx, i, (fpspin_flag_t){.len = eth_len});
+      // printf("Received packet on HPU %d, udp_len=%d\n", i, udp_len);
+
+      // recalculate lengths
+      uint16_t ul_host = payload_len + sizeof(udp_hdr_t);
+      uint16_t il_host = sizeof(ip_hdr_t) + ul_host;
+      uint16_t return_len = il_host + sizeof(eth_hdr_t);
+      hdrs->udp_hdr.length = htons(ul_host);
+      hdrs->udp_hdr.checksum = 0;
+      hdrs->ip_hdr.length = htons(il_host);
+      hdrs->ip_hdr.checksum = 0;
+      hdrs->ip_hdr.checksum =
+          ip_checksum((uint8_t *)&hdrs->ip_hdr, sizeof(ip_hdr_t));
+
+      // printf("Return packet: %d bytes\n", return_len);
+      // hexdump(pkt_addr, return_len);
+
+      fpspin_push_resp(&ctx, i, (fpspin_flag_t){.len = return_len});
 
       if (to_expect != -1) {
         if (!--to_expect) {

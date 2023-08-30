@@ -1,0 +1,4 @@
+
+- DGRAM Ping Statistics -
+1000 transmitted, 1000 received, 0 timed out, 0 disregarded, 0.0% packet loss
+round-trip min/avg/max/stddev = 0.038/0.085/0.112/0.009 ms
