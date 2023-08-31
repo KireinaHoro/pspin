@@ -7,7 +7,8 @@ fatal() {
     exit 1
 }
 
-expect=1000
+count_single=100
+launches=20
 pspin="10.0.0.1"
 udp_port="15000" # arbitrary
 bypass="10.0.0.2"
@@ -15,8 +16,9 @@ interval=0.001
 data_root="data"
 dgping_root="deps/stping"
 dgping_bins="$dgping_root/build/bin"
-trials_count="$(seq 16 100 1416)"
+trials="$(seq 16 100 1416)"
 pspin_utils="$(realpath ../../../../utils)"
+host_wait=3
 
 mkdir -p $data_root/udp
 
@@ -49,8 +51,12 @@ CAT_STDOUT_PID=$!
 # baseline - bypass
 $do_netns pspin $dgping_bins/dgpingd $pspin $udp_port -q -f &>/dev/null &
 DGPINGD_PID=$!
-for sz in $trials_count; do
-    $do_netns bypass $dgping_bins/dgping $pspin $udp_port -f -i $interval -c $expect -s $sz -q > $data_root/udp/baseline-$sz-ping.txt
+for sz in $trials; do
+    out_file=$data_root/udp/baseline-$sz-ping.txt
+    rm $out_file
+    for (( lid = 0; lid < $launches; lid++ )); do
+        $do_netns bypass $dgping_bins/dgping $pspin $udp_port -f -i $interval -c $count_single -s $sz >> $out_file
+    done
 done
 
 sudo kill $DGPINGD_PID
@@ -58,12 +64,16 @@ sudo kill $DGPINGD_PID
 for do_host in false true; do
     make EXTRA_CFLAGS=-DDO_HOST=$do_host
 
-    for sz in $trials_count; do
-        sudo host/udp-ping -o $data_root/udp/$do_host-$sz.csv -e $expect -s 2 &>/dev/null &
+    for sz in $trials; do
+        sudo host/udp-ping -o $data_root/udp/$do_host-$sz.csv -e $(($count_single * $launches)) -s $host_wait &>/dev/null &
         sleep 0.2
-        $do_netns bypass $dgping_bins/dgping $pspin $udp_port -f -i $interval -c $expect -s $sz -q > $data_root/udp/$do_host-$sz-ping.txt
+        out_file=$data_root/udp/$do_host-$sz-ping.txt
+        rm $out_file
+        for (( lid = 0; lid < $launches; lid++ )); do
+            $do_netns bypass $dgping_bins/dgping $pspin $udp_port -f -i $interval -c $count_single -s $sz >> $out_file || echo "Packet loss"
+        done
         if [[ $do_host == "false" ]]; then
-            sleep 2
+            sleep $host_wait
         fi
     done
 done

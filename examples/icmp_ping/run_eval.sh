@@ -7,12 +7,15 @@ fatal() {
     exit 1
 }
 
-expect=1000
+count_single=100
+launches=20
 pspin="10.0.0.1"
 bypass="10.0.0.2"
 data_root="data"
-trials_count="$(seq 16 100 1416)"
+trials="$(seq 16 100 1416)"
 pspin_utils="$(realpath ../../../../utils)"
+interval=0.001
+host_wait=3
 
 mkdir -p $data_root/icmp
 
@@ -37,18 +40,28 @@ fi
 nohup sudo $pspin_utils/cat_stdout.py --dump-files --clean &>/dev/null &
 
 # baseline - bypass
-for sz in $trials_count; do
-    $do_netns bypass ping $pspin -f -c $expect -s $sz -q > $data_root/icmp/baseline-$sz-ping.txt
+for sz in $trials; do
+    out_file=$data_root/icmp/baseline-$sz-ping.txt
+    rm $out_file
+    for (( lid = 0; lid < $launches; lid++ )); do
+        $do_netns bypass ping $pspin -i $interval -c $count_single -s $sz >> $out_file
+    done
 done
 
 for do_host in true false; do
     make EXTRA_CFLAGS=-DDO_HOST=$do_host
 
-    for sz in $trials_count; do
-        nohup sudo host/icmp-ping -o $data_root/icmp/$do_host-$sz.csv -e $expect -s 1 &>/dev/null &
+    for sz in $trials; do
+        nohup sudo host/icmp-ping -o $data_root/icmp/$do_host-$sz.csv -e $(($count_single * $launches)) -s $host_wait &>/dev/null &
         sleep 0.2
-        $do_netns bypass ping $pspin -f -c $expect -s $sz -q > $data_root/icmp/$do_host-$sz-ping.txt
-        sleep 1
+        out_file=$data_root/icmp/$do_host-$sz-ping.txt
+        rm $out_file
+        for (( lid = 0; lid < $launches; lid++ )); do
+            $do_netns bypass ping $pspin -i $interval -c $count_single -s $sz >> $out_file
+        done
+        if [[ $do_host == "false" ]]; then
+            sleep $host_wait
+        fi
     done
 done
 

@@ -4,13 +4,17 @@ import csv
 import argparse
 import re
 import numpy as np
+import scipy.stats as st
 import pandas as pd
 import sys
 from math import ceil
 from itertools import chain
-
 from os import listdir
 from os.path import isfile, join
+
+import matplotlib.pyplot as plt
+import matplotlib.text as mtext
+import seaborn as sns
 
 parser = argparse.ArgumentParser(
     prog='plot.py',
@@ -19,6 +23,7 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument('--data_root', help='root of the CSV files from the datatypes benchmark', default=None)
+parser.add_argument('--query', action='store_true', help='query data interactively')
 
 args = parser.parse_args()
 
@@ -36,16 +41,19 @@ udp_baseline_label = 'UDP Host'
 udp_pspin_label = 'UDP FPsPIN'
 udp_combined_label = 'UDP Host+FPsPIN'
 
+expect_count = 1000
+
 def consume_trials(key, trials):
     # we do not distinguish host dma and notification here
     # since host is notified on every write
-    def append_row(len, type, e2e, e2e_std, real_handler, host_dma, cycles):
+    def append_row(len, type, e2e, e2e_lo, e2e_hi, real_handler, host_dma, cycles):
         global data
         entry = pd.DataFrame.from_dict({
             'len': [len],
             'type': [type],
             'e2e': [e2e],
-            'e2e_std': [e2e_std],
+            'e2e_lo': [e2e_lo],
+            'e2e_hi': [e2e_hi],
             'sender': [e2e - real_handler - host_dma - cycles],
             'real_handler': [real_handler],
             'host_dma': [host_dma],
@@ -78,16 +86,30 @@ def consume_trials(key, trials):
             txt_name = 'baseline'
 
         with open(join(args.data_root, prot.lower(), f'{txt_name}-{l}-ping.txt'), 'r') as f:
-            lines = f.readlines()
+            lines = filter(
+                lambda l: l.find('time=') != -1 and l.find('timeout') == -1,
+                f.readlines())
             if prot == 'ICMP':
-                line = lines[4]
+                idx = 6
             elif prot == 'UDP': # dgping
-                line = lines[3]
-            values = [float(x) for x in line.split(' ')[3].split('/')]
-            ping_avg = values[1]
-            ping_std = values[3]
-                
-        append_row(int(l), key, ping_avg * 1000, ping_std * 1000,
+                idx = 5
+        values = [float(l.split(' ')[idx].split('=')[1]) * 1000 for l in lines]
+
+        '''
+        # plot the distributions
+        fig, (ax1, ax2) = plt.subplots(2, figsize=(7, 2), sharex=True, layout='tight')
+        sns.pointplot(x=values, errorbar='ci', estimator='median', capsize=.3, ax=ax1)
+        sns.stripplot(x=values, jitter=.3, ax=ax2)
+        fig.savefig(f'{prot}-{txt_name}-{l}.pdf')
+        plt.close(fig)
+        '''
+
+        # 95% confidence interval
+        median = np.median(values)
+        bootstrap_ci = st.bootstrap((values,), np.median, confidence_level=0.95, method='percentile')
+        ci_lo, ci_hi = bootstrap_ci.confidence_interval
+
+        append_row(int(l), key, median, median - ci_lo, ci_hi - median,
                    cycles_to_us(real_handler),
                    cycles_to_us(host_dma),
                    cycles_to_us(all_cycles))
@@ -98,7 +120,8 @@ if args.data_root:
         'len',
         'type',
         'e2e',
-        'e2e_std',
+        'e2e_lo',
+        'e2e_hi',
         'sender',
         'real_handler',
         'host_dma',
@@ -115,9 +138,6 @@ if args.data_root:
     data['len'] = data['len'].astype(int)
     data.to_pickle(dat_pkl)
 
-import matplotlib.pyplot as plt
-import matplotlib.text as mtext
-
 # https://stackoverflow.com/a/71540238/5520728
 class LegendTitle(object):
     def __init__(self, text_props=None):
@@ -133,28 +153,36 @@ class LegendTitle(object):
 params = {
     'font.family': 'Helvetica Neue',
     'font.weight': 'light',
+    'font.size': 9,
     'axes.titleweight': 'normal',
     'figure.autolayout': True,
 }
 plt.rcParams.update(params)
+figwidth=5.125
+def figsize(aspect_ratio):
+    return (figwidth, figwidth/aspect_ratio)
 
 dp: pd.DataFrame = pd.read_pickle(dat_pkl)
+if args.query:
+    import code
+    code.InteractiveConsole(locals=globals()).interact()
+    sys.exit(0)
 
 # E2E Latency
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=figsize(5/3))
 
 task_dict = {}
 for lbl in [icmp_baseline_label, icmp_pspin_label, icmp_combined_label, udp_baseline_label, udp_pspin_label, udp_combined_label]:
     task, setup = lbl.split(' ')
 
     trial = dp[dp['type'] == lbl]
-    trial.plot(x='len', y='e2e', yerr='e2e_std', ax=ax)
+    trial.plot(x='len', y='e2e', yerr=(trial['e2e_lo'], trial['e2e_hi']), ax=ax, ecolor='black')
 
     task_dict.setdefault(task, {})[setup] = ax.lines[-1]
 
 ax.grid(which='both')
 ax.set_xlabel('Payload Length (B)')
-ax.set_ylabel('End-to-End Latency (us)')
+ax.set_ylabel('E2E Latency (us)')
 ax.get_legend().remove()
 
 graphics, texts = [], []
@@ -169,27 +197,33 @@ for idx, (k, kv) in enumerate(task_dict.items()):
         graphics.append('')
         texts.append('')
 
-fig.legend(graphics, texts, handler_map={str: LegendTitle({'fontsize': 11, 'weight': 'normal'})}, loc='center right')
+fig.legend(graphics, texts, handler_map={str: LegendTitle({'weight': 'normal'})}, loc='center right')
+fig.set_figwidth(5.125)
 fig.tight_layout(rect=[0, 0, .78, 1])
-fig.savefig('p1.pdf')
+fig.savefig('pingpong-lat.pdf')
 
 indices = ['cycles', 'real_handler', 'host_dma', 'sender']
 index_labels = ['Syscall', 'Handler', 'Host Proc.', 'Sender']
 
 # stackplot for components
-fig, axes = plt.subplots(2, 2, sharey=True, sharex=True)
+fig, axes = plt.subplots(2, 2, sharey=True, sharex=True, figsize=figsize(5/4))
 ax_labels = [[icmp_pspin_label, icmp_combined_label], [udp_pspin_label, udp_combined_label]]
 did_labels = False
 for ax, lbl in zip(chain(*axes), chain(*ax_labels)):
-    ax.grid()
     ax.set_xlabel('Payload Length (B)')
     ax.set_ylabel('Latency (us)')
+    ax.set_yticks(range(0, 300, 100))
+    ax.set_yticks(range(0, 300, 20), minor=True)
+
+    ax.grid(which='minor', alpha=0.2)
+    ax.grid(which='major', alpha=0.5)
+
     ax.set_title(lbl)
     
     trial = dp[dp['type'] == lbl]
     
     host_lbl = icmp_baseline_label if 'ICMP' in lbl else udp_baseline_label
-    host_avg = dp[dp['type'] == host_lbl]['e2e'].mean()
+    host_avg = dp[dp['type'] == host_lbl]['e2e'].median()
     if not did_labels:
         did_labels = True
         ax.stackplot('len', *indices, labels=index_labels, data=trial)
@@ -199,8 +233,8 @@ for ax, lbl in zip(chain(*axes), chain(*ax_labels)):
         ax.axhline(y=host_avg, linestyle='--', color='purple')
 
     # plot error bars of e2e latencies
-    ax.errorbar('len', 'e2e', 'e2e_std', data=trial, fmt='none', label=None, ecolor='black')
+    ax.errorbar('len', 'e2e', (trial['e2e_lo'], trial['e2e_hi']), data=trial, fmt='none', label=None, ecolor='black')
 
 fig.legend(loc='center right')
 fig.tight_layout(rect=[0, 0, .82, 1])
-fig.savefig('p2.pdf')
+fig.savefig('pingpong-breakdown.pdf')
