@@ -53,7 +53,7 @@ $do_netns pspin $dgping_bins/dgpingd $pspin $udp_port -q -f &>/dev/null &
 DGPINGD_PID=$!
 for sz in $trials; do
     out_file=$data_root/udp/baseline-$sz-ping.txt
-    rm $out_file
+    rm -f $out_file
     for (( lid = 0; lid < $launches; lid++ )); do
         $do_netns bypass $dgping_bins/dgping $pspin $udp_port -f -i $interval -c $count_single -s $sz >> $out_file
     done
@@ -68,7 +68,7 @@ for do_host in false true; do
         sudo host/udp-ping -o $data_root/udp/$do_host-$sz.csv -e $(($count_single * $launches)) -s $host_wait &>/dev/null &
         sleep 0.2
         out_file=$data_root/udp/$do_host-$sz-ping.txt
-        rm $out_file
+        rm -f $out_file
         for (( lid = 0; lid < $launches; lid++ )); do
             $do_netns bypass $dgping_bins/dgping $pspin $udp_port -f -i $interval -c $count_single -s $sz >> $out_file || echo "Packet loss"
         done

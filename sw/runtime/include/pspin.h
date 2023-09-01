@@ -34,12 +34,12 @@ typedef uint32_t dma_t;
 typedef volatile uint32_t futex_t;
 
 // definition in link.ld
+#define MAX_COUNTERS 16
+
 struct perf_counter {
   uint32_t sum;
   uint32_t count;
 };
-
-#define MAX_COUNTERS 16
 
 struct host_data {
   uint64_t flag[CORE_COUNT];

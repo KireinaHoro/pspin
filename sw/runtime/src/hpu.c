@@ -18,8 +18,6 @@
 #include "spin_conf.h"
 #include "util.h"
 
-#include "shim.h"
-
 #define MSTATUS_USER (3 << 11)
 
 extern void rt_vec();
@@ -180,8 +178,8 @@ void int0_handler() {
   read_csr(PULP_CSR_MEPC, mepc);
   // mtval not implemented in PULP
 
-  switch (mcause) {
-  case 8: { // ECALL
+  // force earlier check of syscall (fastpath)
+  if (__builtin_expect(mcause, 8) == 8) {
     // get saved area
     uint32_t saved;
     read_csr(mscratch, saved);
@@ -206,31 +204,34 @@ void int0_handler() {
       write_csr(PULP_CSR_MEPC, resume);
       return;
     }
-    break;
-  }
-  case 1:
-    handler_error("Instruction access fault");
-    break;
-  case 2:
-    handler_error("Illegal instruction");
-    break;
-  case 5:
-    handler_error("Load access fault");
-    break;
-  case 7:
-    handler_error("Store/AMO access fault");
-    break;
-  default:
-    handler_error("Unrecognized mcause");
-    break;
-  }
+  } else
+    switch (mcause) {
+    case 8: { // ECALL
+    }
+    case 1:
+      handler_error("Instruction access fault");
+      break;
+    case 2:
+      handler_error("Illegal instruction");
+      break;
+    case 5:
+      handler_error("Load access fault");
+      break;
+    case 7:
+      handler_error("Store/AMO access fault");
+      break;
+    default:
+      handler_error("Unrecognized mcause");
+      break;
+    }
 
   // diagnostics
   uint32_t saved;
   read_csr(mscratch, saved);
   volatile saved_regs_t *saved_regs = (saved_regs_t *)saved;
   dump_regs(saved_regs);
-  for (;;);
+  for (;;)
+    ;
 
   MMIO_WRITE(HWSCHED_ERROR, mcause);
   MMIO_READ(HWSCHED_DOORBELL);
