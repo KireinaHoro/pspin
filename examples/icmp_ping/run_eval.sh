@@ -42,7 +42,7 @@ nohup sudo $pspin_utils/cat_stdout.py --dump-files --clean &>/dev/null &
 # baseline - bypass
 for sz in $trials; do
     out_file=$data_root/icmp/baseline-$sz-ping.txt
-    rm $out_file
+    rm -f $out_file
     for (( lid = 0; lid < $launches; lid++ )); do
         $do_netns bypass ping $pspin -i $interval -c $count_single -s $sz >> $out_file
     done
@@ -55,7 +55,7 @@ for do_host in true false; do
         nohup sudo host/icmp-ping -o $data_root/icmp/$do_host-$sz.csv -e $(($count_single * $launches)) -s $host_wait &>/dev/null &
         sleep 0.2
         out_file=$data_root/icmp/$do_host-$sz-ping.txt
-        rm $out_file
+        rm -f $out_file
         for (( lid = 0; lid < $launches; lid++ )); do
             $do_netns bypass ping $pspin -i $interval -c $count_single -s $sz >> $out_file
         done
