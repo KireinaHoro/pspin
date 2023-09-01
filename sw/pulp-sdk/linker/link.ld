@@ -94,7 +94,7 @@ SECTIONS
     sdata  =  .;
     _sdata  =  .;
     __host_data = .;
-    . += 136; /* 16 * uint64_t + 2 * uint32_t */
+    . += 256; /* sizeof(struct host_data) */
     *(.data);
     *(.data.*)
     *(.sdata);
