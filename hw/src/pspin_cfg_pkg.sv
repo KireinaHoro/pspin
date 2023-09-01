@@ -43,7 +43,7 @@ package automatic pspin_cfg_pkg;
   localparam int unsigned       L1_CLUSTER_MEM_SIZE     = 32'h0040_0000; //address space reserved to a cluster is 4 MiB
 
   //this is the actual L1 memory size
-  localparam int unsigned       L1_CLUSTER_ACTUAL_MEM_SIZE = 32'h0010_0000; // 1 MiB
+  localparam int unsigned       L1_CLUSTER_ACTUAL_MEM_SIZE = 32'h0004_0000; // 256 KiB
 
   //L1_RUNTIME_OFFSET + L1_RUNTIME_SIZE < L1_SIZE
 
@@ -83,14 +83,14 @@ package automatic pspin_cfg_pkg;
   localparam int unsigned MEM_PKT_N_PAR_CUTS          = 8;
   localparam int unsigned MEM_PKT_CUT_N_WORDS         = 1024;
   localparam int unsigned MEM_PKT_CUT_DW              = 512;
-  localparam int unsigned MEM_PKT_LATENCY             = 1;
+  localparam int unsigned MEM_PKT_LATENCY             = 2;
 
   // L2 handler memory
   localparam int unsigned MEM_HND_SIZE                = 1*1024*1024;
   localparam int unsigned MEM_HND_N_PAR_CUTS          = 32; // at least 32 banks: 2 * 2 * 8
   localparam int unsigned MEM_HND_CUT_N_WORDS         = 4096;
   localparam int unsigned MEM_HND_CUT_DW              = 64;
-  localparam int unsigned MEM_HND_LATENCY             = 1;
+  localparam int unsigned MEM_HND_LATENCY             = 2;
 
   // Interface types
   typedef logic [AXI_AW-1:0]         addr_t;

@@ -8,8 +8,8 @@ MEMORY
   L2           		: ORIGIN = 0x1c000000, LENGTH = 0x000c0000
   L2_handler_data	: ORIGIN = 0x1c0c0000, LENGTH = 0x00040000
   L2_queue     		: ORIGIN = 0x1c100000, LENGTH = 0x00100000
-  L1                 	: ORIGIN = 0x10000000, LENGTH = 0x00100000
-  L1_aliased         	: ORIGIN = 0x1b000000, LENGTH = 0x00100000
+  L1                 	: ORIGIN = 0x10000000, LENGTH = 0x00040000
+  L1_aliased         	: ORIGIN = 0x1b000000, LENGTH = 0x00040000
 }
 
 __ZERO = DEFINED(__ZERO) ? __ZERO  : 0;
