@@ -126,12 +126,6 @@ void ruleset_icmp_echo(fpspin_ruleset_t *rs) {
   };
 }
 
-static inline double get_cycles(fpspin_ctx_t *ctx, int id) {
-  fpspin_counter_t counter = fpspin_get_counter(ctx, id);
-
-  return (double)counter.sum / counter.count;
-}
-
 int main(int argc, char *argv[]) {
   struct arguments args = {
       .pspin_dev = "/dev/pspin0",
@@ -235,9 +229,9 @@ int main(int argc, char *argv[]) {
 
 out:;
   // get telemetry
-  double handler_avg = get_cycles(&ctx, 0);
-  double host_dma_avg = get_cycles(&ctx, 1);
-  double cycles_avg = get_cycles(&ctx, 2);
+  double handler_avg = fpspin_get_cycles(&ctx, 0);
+  double host_dma_avg = fpspin_get_cycles(&ctx, 1);
+  double cycles_avg = fpspin_get_cycles(&ctx, 2);
 
   fpspin_exit(&ctx);
 

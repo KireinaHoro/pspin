@@ -163,11 +163,6 @@ typedef struct {
   double pkt_cycles;
   double msg_cycles;
 } datatypes_measure_t;
-static inline double get_cycles(fpspin_ctx_t *ctx, int id) {
-  fpspin_counter_t counter = fpspin_get_counter(ctx, id);
-
-  return (double)counter.sum / counter.count;
-}
 
 typedef struct {
   int file_id;
@@ -497,8 +492,8 @@ finish:;
   if (measure_idx != -1) {
     app_data->types[measure_idx] = (datatypes_measure_t){
         .rtt = rtt,
-        .pkt_cycles = get_cycles(ctx, 0),
-        .msg_cycles = get_cycles(ctx, 1),
+        .pkt_cycles = fpspin_get_cycles(ctx, 0),
+        .msg_cycles = fpspin_get_cycles(ctx, 1),
     };
     app_data->dgemm_elapsed[measure_idx] = dgemm_total;
     app_data->dgemm_iters[measure_idx] = i;
@@ -648,8 +643,8 @@ int main(int argc, char *argv[]) {
       double ref_mbps = rtt_to_mbps(app_data, rtt);
       app_data->types_ref[i] = (datatypes_measure_t){
           .rtt = rtt,
-          .pkt_cycles = get_cycles(&ctx, 0),
-          .msg_cycles = get_cycles(&ctx, 1),
+          .pkt_cycles = fpspin_get_cycles(&ctx, 0),
+          .msg_cycles = fpspin_get_cycles(&ctx, 1),
       };
       printf("Reference datatypes: %lf Mbps\n", ref_mbps);
     }
