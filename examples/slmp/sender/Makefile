@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS ?= -O3 -g -fsanitize=address -march=native
 LIBS ?= $(shell realpath ../../../../../../../../lib)
 
-CFLAGS += -Wall
+CFLAGS += -Wall -fopenmp
 CPPFLAGS += -I$(LIBS) -D__FPSPIN_HOST__
 LDFLAGS += -L$(LIBS)/fpspin
 LDLIBS += -lfpspin
