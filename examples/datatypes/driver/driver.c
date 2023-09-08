@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "gdriver.h"
 #include "pspinsim.h"
@@ -101,8 +102,13 @@ void interactive_cb(uint64_t user_ptr, uint64_t nic_arrival_time,
 
   // send rest of message
   packet_descr_t *pkt = &msg->packets[next_idx];
+
+  // wait random number of cycles to simulate real world situation
+  int wait = rand() % 200;
+  LOG("Adding next packet with %d cycles delay\n", wait);
+
   pspinsim_packet_add(fb_args->ec, fb_args->msgid, pkt->p, pkt->len, pkt->len,
-                      pkt->is_eom, 0, user_ptr);
+                      pkt->is_eom, wait, user_ptr);
 }
 
 int main(int argc, char *argv[]) {
@@ -114,6 +120,11 @@ int main(int argc, char *argv[]) {
   int ret = 0;
   int ectx_num;
   gdriver_init(argc, argv, NULL, &ectx_num);
+
+  int seed = time(NULL);
+  LOG("random seed: %d\n", seed);
+  srand(seed);
+
   if (!gdriver_is_interactive()) {
     fprintf(stderr, "datatypes host only supports interactive mode\n");
     return EXIT_FAILURE;
@@ -191,8 +202,9 @@ int main(int argc, char *argv[]) {
     arg->msgid = i;
     arg->pktidx = 0;
     arg->ec = ec;
-    pspinsim_packet_add(ec, i, pkt->p, pkt->len, pkt->len, pkt->is_eom, 0,
-                        (uint64_t)arg);
+
+    pspinsim_packet_add(ec, i, pkt->p, pkt->len, pkt->len, pkt->is_eom,
+                        rand() % 100, (uint64_t)arg);
   }
 
   // set interactive callback
