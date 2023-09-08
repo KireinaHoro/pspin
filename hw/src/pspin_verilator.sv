@@ -30,11 +30,11 @@ module pspin_verilator #(
     // asserted when HPUs are ready
     output logic                            pspin_active_o,
 
-    // termination signal 
+    // termination signal
     input  logic                            eos_i,
 
     // MPQ full signal
-    output logic [NUM_MPQ-1:0]              mpq_full_o,         
+    output logic [NUM_MPQ-1:0]              mpq_full_o,
 
 
     /** NIC inbound engine AXI slave port **/
@@ -300,7 +300,7 @@ module pspin_verilator #(
     output mem_size_t                       feedback_her_size_o,
     output logic [C_MSGID_WIDTH-1:0]        feedback_msgid_o,
 
-    
+
     /** NIC outbound engine or NIC command unit **/
     input  logic                            nic_cmd_req_ready_i,
     output logic                            nic_cmd_req_valid_o,
@@ -310,7 +310,7 @@ module pspin_verilator #(
     output host_addr_t                      nic_cmd_req_src_addr_o,
     output mem_size_t                       nic_cmd_req_length_o,
     output user_ptr_t                       nic_cmd_req_user_ptr_o,
-    
+
     input logic                             nic_cmd_resp_valid_i,
     input pspin_cmd_id_t                    nic_cmd_resp_id_i
 );
@@ -635,7 +635,7 @@ module pspin_verilator #(
     assign axi_host_mst.r_valid                     = host_master_r_valid_i;
     assign host_master_r_ready_o                    = axi_host_mst.r_ready;
 
-    assign axi_host_mst.b_resp                      = host_master_b_resp_i; 
+    assign axi_host_mst.b_resp                      = host_master_b_resp_i;
     assign axi_host_mst.b_id                        = host_master_b_id_i;
     assign axi_host_mst.b_user                      = host_master_b_user_i;
     assign axi_host_mst.b_valid                     = host_master_b_valid_i;
@@ -661,7 +661,7 @@ module pspin_verilator #(
     assign her_descr.mpq_meta.scratchpad_addr[1]    = her_meta_scratchpad_1_addr_i;
     assign her_descr.mpq_meta.scratchpad_size[0]    = her_meta_scratchpad_0_size_i;
     assign her_descr.mpq_meta.scratchpad_size[1]    = her_meta_scratchpad_1_size_i;
-    
+
     // Connecting feedback
     assign feedback_her_addr_o                      = feedback.pkt_addr;
     assign feedback_her_size_o                      = feedback.pkt_size;
@@ -676,7 +676,7 @@ module pspin_verilator #(
     assign nic_cmd_req_user_ptr_o                   = nic_cmd_req.descr.nic_cmd.user_ptr;
 
     // Connecting NIC command response
-    assign nic_cmd_resp.cmd_id                      = nic_cmd_resp_id_i; 
+    assign nic_cmd_resp.cmd_id                      = nic_cmd_resp_id_i;
 
 
   // Observe SoC bus for errors.
