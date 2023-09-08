@@ -130,9 +130,10 @@ int main(int argc, char *argv[]) {
 
   fpspin_clear_counter(&ctx, 0); // cycles
   fpspin_clear_counter(&ctx, 1); // whole message
-  fpspin_clear_counter(&ctx, 2); // per-packet
+  fpspin_clear_counter(&ctx, 2); // per-packet (ph only)
   fpspin_clear_counter(&ctx, 3); // host DMA
   fpspin_clear_counter(&ctx, 4); // host notification
+  fpspin_clear_counter(&ctx, 5); // head/tail (hh and th)
 
   int to_expect = args.expect ? args.expect : -1;
   while (true) {
@@ -172,6 +173,8 @@ int main(int argc, char *argv[]) {
         fclose(fp);
 
         printf("Written file %s\n", filename_buf);
+      } else {
+        printf("Received file len=%d\n", file_len);
       }
 
     ack_file:
@@ -197,6 +200,8 @@ out:;
   fpspin_counter_t hc = fpspin_get_counter(&ctx, 3);
   double notification_avg = fpspin_get_cycles(&ctx, 4);
   fpspin_counter_t nc = fpspin_get_counter(&ctx, 4);
+  double head_tail_avg = fpspin_get_cycles(&ctx, 5);
+  fpspin_counter_t htc = fpspin_get_counter(&ctx, 5);
 
   fpspin_exit(&ctx);
 
@@ -209,11 +214,13 @@ out:;
          hc.count);
   printf("... notification: %lf cycles (sum %d, count %d)\n", notification_avg,
          nc.sum, nc.count);
+  printf("... head/tail: %lf cycles (sum %d, count %d)\n", head_tail_avg,
+         htc.sum, htc.count);
 
   if (fp) {
-    fprintf(fp, "cycles,msg,pkt,dma,notification\n");
-    fprintf(fp, "%lf,%lf,%lf,%lf,%lf\n", cycles_avg, msg_avg, pkt_avg, host_avg,
-            notification_avg);
+    fprintf(fp, "cycles,msg,pkt,dma,notification,headtail\n");
+    fprintf(fp, "%lf,%lf,%lf,%lf,%lf,%lf\n", cycles_avg, msg_avg, pkt_avg,
+            host_avg, notification_avg, head_tail_avg);
     fclose(fp);
   }
 

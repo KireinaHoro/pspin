@@ -28,9 +28,6 @@
 #define DEBUG(...)
 #endif
 
-static volatile uint32_t end_of_message_amo __attribute__((aligned(32)));
-static volatile uint32_t total_bytes_amo __attribute__((aligned(32)));
-
 #define SWAP(a, b, type)                                                       \
   do {                                                                         \
     type tmp = a;                                                              \
@@ -65,15 +62,12 @@ uint32_t start_file;
 
 __handler__ void slmp_hh(handler_args_t *args) {
   // counter 0: estimate latency of cycles()
-  uint32_t start_cycles = cycles();
+  // uint32_t start_cycles = cycles();
   // counter 1: latency for whole messages
-  start_file = cycles();
-  push_counter(&__host_data.counters[0], start_file - start_cycles);
+  // start_file = cycles();
+  // push_counter(&__host_data.counters[0], start_file - start_cycles);
 
   task_t *task = args->task;
-
-  amo_store(&end_of_message_amo, 0);
-  amo_store(&total_bytes_amo, 0);
 
   slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
@@ -91,10 +85,15 @@ __handler__ void slmp_hh(handler_args_t *args) {
     printf("Error: first packet did not require SYN; flags = %#x\n", flags);
     return;
   }
+
+  // counter 5: head/tail
+  // push_counter(&__host_data.counters[5], cycles() - start_file);
 }
 
 __handler__ void slmp_th(handler_args_t *args) {
   task_t *task = args->task;
+
+  // uint32_t start_tail = cycles();
 
   slmp_pkt_hdr_t *hdrs = (slmp_pkt_hdr_t *)(task->pkt_mem);
   uint32_t pkt_off = ntohl(hdrs->slmp_hdr.pkt_off);
@@ -108,25 +107,27 @@ __handler__ void slmp_th(handler_args_t *args) {
     return;
   }
 
-  // notify host for unpacked message -- 0-byte host request
-  // FIXME: this is synchronous; do we need an asynchronous interface?
-  // XXX: which flag should we use?
-  DEBUG("eom_amo: %d, tb_amo: %d\n", end_of_message_amo, total_bytes_amo);
+  uint32_t total_len = pkt_off + SLMP_PAYLOAD_LEN(hdrs);
 
   // counter 4: host notification
-  uint32_t host_start = cycles();
-  fpspin_host_req(args, MAX(end_of_message_amo, total_bytes_amo));
-  uint32_t host_end = cycles();
+  // uint32_t host_start = cycles();
+  fpspin_host_req(args, total_len);
+  // uint32_t host_end = cycles();
   DEBUG("host_start=%d host_end=%d\n", host_start, host_end);
-  push_counter(&__host_data.counters[4], host_end - host_start);
+  // push_counter(&__host_data.counters[4], host_end - host_start);
+
+  // uint32_t end_tail = cycles();
 
   // counter 1: latency for whole messages
-  push_counter(&__host_data.counters[1], cycles() - start_file);
+  // push_counter(&__host_data.counters[1], end_tail - start_file);
+
+  // counter 5: head/tail
+  // push_counter(&__host_data.counters[5], end_tail - start_tail);
 }
 
 __handler__ void slmp_ph(handler_args_t *args) {
   // counter 2: per-packet latency
-  uint32_t start = cycles();
+  // uint32_t start = cycles();
 
   task_t *task = args->task;
 
@@ -138,27 +139,21 @@ __handler__ void slmp_ph(handler_args_t *args) {
   DEBUG("Payload: flow id %d, offset %d, payload size %d\n", task->flow_id,
         pkt_off, SLMP_PAYLOAD_LEN(hdrs));
 
-  // update tail and total bytes counter
-  amo_add(&total_bytes_amo, SLMP_PAYLOAD_LEN(hdrs));
-
-  uint32_t curr_tail = pkt_off + SLMP_PAYLOAD_LEN(hdrs);
-  amo_maxu(&end_of_message_amo, curr_tail);
-
   // counter 3: host DMA
-  uint32_t host_start = cycles();
+  // uint32_t host_start = cycles();
   uint64_t host_start_addr = HOST_ADDR(args) + CORE_COUNT * PAGE_SIZE;
   spin_cmd_t cmd;
   spin_dma_to_host(host_start_addr + pkt_off, (uint32_t)payload,
                    SLMP_PAYLOAD_LEN(hdrs), 0, &cmd);
-  spin_cmd_wait(cmd);
-  push_counter(&__host_data.counters[3], cycles() - host_start);
+  // spin_cmd_wait(cmd);
+  // push_counter(&__host_data.counters[3], cycles() - host_start);
 
   // send back ack, if the remote requests for it
   if (SYN(flags)) {
     send_ack(hdrs, task);
   }
 
-  push_counter(&__host_data.counters[2], cycles() - start);
+  // push_counter(&__host_data.counters[2], cycles() - start);
 }
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
@@ -167,7 +162,4 @@ void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,
   *hh = handlers[0];
   *ph = handlers[1];
   *th = handlers[2];
-
-  amo_store(&end_of_message_amo, 0);
-  amo_store(&total_bytes_amo, 0);
 }

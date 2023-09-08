@@ -95,7 +95,7 @@ __handler__ void datatypes_hh(handler_args_t *args) {
   spin_core_state_t *my_state = &dtmem->state[flowid];
   DEBUG("Start of message #%u\n", flowid);
 
-  my_state->msg_start = cycles();
+  // my_state->msg_start = cycles();
 
   if (!SYN(flags)) {
     printf("Error: first packet did not require SYN; flags = %#x\n", flags);
@@ -115,7 +115,7 @@ __handler__ void datatypes_th(handler_args_t *args) {
   int flowid = args->task->flow_id;
   spin_datatype_mem_t *dtmem = (spin_datatype_mem_t *)task->handler_mem;
   spin_core_state_t *my_state = &dtmem->state[flowid];
-  push_counter(&__host_data.counters[1], cycles() - my_state->msg_start);
+  // push_counter(&__host_data.counters[1], cycles() - my_state->msg_start);
 
   DEBUG("End of message #%u\n", flowid);
 
@@ -166,7 +166,7 @@ __handler__ void datatypes_ph(handler_args_t *args) {
 
   uint64_t last = stream_end_offset;
 
-  int time = cycles();
+  // int time = cycles();
   DEBUG("[%d] P@%p: [%d:%d] #%d @ %p\n", time, PKT_MEM(task),
         stream_start_offset, stream_end_offset, flowid, my_state);
 
@@ -179,12 +179,12 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   }
 #endif
 
-  uint32_t start = cycles();
+  // uint32_t start = cycles();
 
   spin_segment_manipulate(&my_state->state, stream_start_offset, &last,
                           &my_state->params);
 
-  uint32_t end = cycles();
+  // uint32_t end = cycles();
 
   // send back ack, if the remote requests for it
   if (SYN(flags)) {
@@ -192,7 +192,7 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   }
 
   // counter 0: per-packet average time
-  push_counter(&__host_data.counters[0], end - start);
+  // push_counter(&__host_data.counters[0], end - start);
 }
 
 void init_handlers(handler_fn *hh, handler_fn *ph, handler_fn *th,

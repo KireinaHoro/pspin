@@ -8,13 +8,19 @@ import scipy.stats as st
 import pandas as pd
 import sys
 from math import ceil
-from itertools import chain
+from itertools import chain, product
 from os import listdir
 from os.path import isfile, join
 
 import matplotlib.pyplot as plt
 import matplotlib.text as mtext
+import matplotlib.colors as colors
+from matplotlib.ticker import FuncFormatter, ScalarFormatter
+from matplotlib.cm import ScalarMappable
+from matplotlib import container, colormaps
 import seaborn as sns
+
+from si_prefix import si_format
 
 parser = argparse.ArgumentParser(
     prog='plot.py',
@@ -22,7 +28,7 @@ parser = argparse.ArgumentParser(
     epilog='Report bugs to Pengcheng Xu <pengxu@ethz.ch>.'
 )
 
-parser.add_argument('--data_root', help='root of the CSV files from the datatypes benchmark', default=None)
+parser.add_argument('--data_root', help='root of the CSV files from the SLMP benchmark', default=None)
 parser.add_argument('--query', action='store_true', help='query data interactively')
 
 args = parser.parse_args()

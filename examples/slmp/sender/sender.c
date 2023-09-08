@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <immintrin.h>
 #include <netinet/in.h>
+#include <omp.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>

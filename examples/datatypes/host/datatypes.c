@@ -305,10 +305,6 @@ static void finish_datatypes_spin(fpspin_ctx_t *ctx) {
   }
 
   free(app_data);
-
-  // wait until all stdout are flushed
-  printf("Waiting for stdout flush...\n");
-  sleep(2);
   fpspin_exit(ctx);
 }
 
