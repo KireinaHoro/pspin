@@ -5,6 +5,7 @@ import argparse
 import re
 import numpy as np
 import pandas as pd
+import sys
 from math import ceil
 
 from os import listdir
@@ -41,7 +42,7 @@ dt_mpich_fpspin_label = 'Datatypes MPICH/FPsPIN'
 dt_ref_label = 'Datatypes Reference'
 dt_overlap_label = 'Datatypes Overlap'
 
-iperf_vanilla = 'IPerf/Corundum'
+iperf_vanilla = 'Datatypes IPerf/Corundum'
 
 def consume_trials(key, full_key, trials, num_parallel_func):
     # https://stackoverflow.com/a/42837693/5520728
@@ -143,12 +144,64 @@ if args.data_root:
     consume_trials('m', 'msg_size', trials, lambda _: 16)
     data.to_pickle(msg_size_pkl)
 
-import altair as alt
-from altair import datum
-from altair_saver import save
+import matplotlib.pyplot as plt
+import matplotlib.text as mtext
 
-data_par = pd.read_pickle(parallel_pkl)
-base = alt.Chart(data_par)
+# https://stackoverflow.com/a/71540238/5520728
+class LegendTitle(object):
+    def __init__(self, text_props=None):
+        self.text_props = text_props or {}
+        super(LegendTitle, self).__init__()
+
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        x0, y0 = handlebox.xdescent, handlebox.ydescent
+        title = mtext.Text(x0, y0, orig_handle, **self.text_props)
+        handlebox.add_artist(title)
+        return title
+
+params = {
+    'font.family': 'Helvetica Neue',
+    'font.weight': 'light',
+    'axes.titleweight': 'bold',
+}
+plt.rcParams.update(params)
+
+dp: pd.DataFrame = pd.read_pickle(parallel_pkl)
+
+fig1, ax1 = plt.subplots()
+
+task_dict = {}
+
+for lbl in [dt_ref_label, dt_overlap_label, dt_mpich_fpspin_label, dt_mpich_vanilla_label, iperf_vanilla]:
+    task, experiment = lbl.split(' ')
+    
+    val = dp[dp['type'] == lbl].groupby('parallelism')['value']
+    val.mean().plot(x='parallelism', y='value', yerr=val.std(), ax=ax1, label=lbl)
+
+    task_dict.setdefault(task, {})[experiment] = ax1.lines[-1]
+
+ax1.grid(which='both')
+ax1.set_xlabel('Degree of Parallelism')
+ax1.set_ylabel('Throughput (Mbps)')
+ax1.set_yscale('log')
+
+graphics, texts = [], []
+for idx, (k, kv) in enumerate(task_dict.items()):
+    graphics.append(k)
+    texts.append('')
+    for kk, vv in kv.items():
+        graphics.append(vv)
+        texts.append(kk)
+    
+    if idx != len(task_dict) - 1:
+        graphics.append('')
+        texts.append('')
+
+fig1.legend(graphics, texts, handler_map={str: LegendTitle({'fontsize': 11, 'weight': 'normal'})}, loc='lower right')
+
+fig1.savefig('p1.pdf')
+
+sys.exit(0)
 
 parallel_title = 'Degree of Parallelism'
 

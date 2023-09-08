@@ -154,7 +154,8 @@ params = {
     'font.family': 'Helvetica Neue',
     'font.weight': 'light',
     'font.size': 9,
-    'axes.titleweight': 'normal',
+    'axes.titlesize': 'medium',
+    'axes.titleweight': 'light',
     'figure.autolayout': True,
 }
 plt.rcParams.update(params)
@@ -180,7 +181,8 @@ for lbl in [icmp_baseline_label, icmp_pspin_label, icmp_combined_label, udp_base
 
     task_dict.setdefault(task, {})[setup] = ax.lines[-1]
 
-ax.grid(which='both')
+ax.grid(which='minor', alpha=0.2)
+ax.grid(which='major', alpha=0.5)
 ax.set_xlabel('Payload Length (B)')
 ax.set_ylabel('E2E Latency (us)')
 ax.get_legend().remove()
@@ -201,38 +203,92 @@ ax.legend(graphics, texts, handler_map={str: LegendTitle({'weight': 'normal'})},
 fig.savefig('pingpong-lat.pdf')
 
 indices = ['cycles', 'real_handler', 'host_dma', 'sender']
-index_labels = ['Syscall', 'Handler', 'Host Proc.', 'Sender']
+index_labels = ['Syscall', 'Handler', 'Host Proc.', 'Link+Sender']
 
 # stackplot for components
-fig, axes = plt.subplots(2, 2, sharey=True, sharex=True, figsize=figsize(5/4))
+# https://matplotlib.org/stable/gallery/subplots_axes_and_figures/gridspec_multicolumn.html
+fig = plt.figure(figsize=figsize(6/5))
+gs = fig.add_gridspec(3, 2, height_ratios=[1, 2, 2])
 ax_labels = [[icmp_pspin_label, icmp_combined_label], [udp_pspin_label, udp_combined_label]]
+axes = [[None, None], [None, None]]
 did_labels = False
-for ax, lbl in zip(chain(*axes), chain(*ax_labels)):
-    ax.set_xlabel('Payload Length (B)')
-    ax.set_ylabel('Latency (us)')
-    ax.set_yticks(range(0, 300, 100))
-    ax.set_yticks(range(0, 300, 20), minor=True)
+for x in range(2):
+    for y in range(1, 3):
+        lbl = ax_labels[y-1][x]
+        if axes[0][0]:
+            ax = fig.add_subplot(gs[y, x], sharex=axes[0][0], sharey=axes[0][0])
+        else:
+            ax = fig.add_subplot(gs[y, x])
 
-    ax.grid(which='minor', alpha=0.2)
-    ax.grid(which='major', alpha=0.5)
+        axes[y-1][x] = ax
 
-    ax.set_title(lbl)
-    
-    trial = dp[dp['type'] == lbl]
-    
-    host_lbl = icmp_baseline_label if 'ICMP' in lbl else udp_baseline_label
-    host_avg = dp[dp['type'] == host_lbl]['e2e'].median()
-    if not did_labels:
-        did_labels = True
-        ax.stackplot('len', *indices, labels=index_labels, data=trial)
-        ax.axhline(y=host_avg, linestyle='--', color='purple', label='Baseline')
+        ax.set_yticks(range(0, 300, 100))
+        ax.set_yticks(range(0, 300, 20), minor=True)
+
+        ax.grid(which='minor', alpha=0.2)
+        ax.grid(which='major', alpha=0.5)
+
+        ax.set_title(lbl)
+        ax.set_xlabel('Payload Length (B)')
+        ax.set_ylabel('Latency (us)')
+        ax.label_outer()
+        
+        trial = dp[dp['type'] == lbl]
+        
+        host_lbl = icmp_baseline_label if 'ICMP' in lbl else udp_baseline_label
+        host_avg = dp[dp['type'] == host_lbl]['e2e'].median()
+
+        axhline_kw = {'color': 'purple', 'linestyle': '--'}
+        stackplot_kw = {'data': trial}
+        if not did_labels:
+            did_labels = True
+            axhline_kw['label'] = 'Baseline'
+            stackplot_kw['labels'] = index_labels
+
+        stack = ax.stackplot('len', *indices, **stackplot_kw)
+        ax.axhline(y=host_avg, **axhline_kw)
+
+        index_colors = [s.get_facecolor() for s in stack]
+
+        # plot error bars of e2e latencies
+        ax.errorbar('len', 'e2e', (trial['e2e_lo'], trial['e2e_hi']), data=trial, fmt='none', label=None, ecolor='black')
+
+color_dict = dict(zip(indices, index_colors))
+
+timeline_pspin = [('sender', 2), ('cycles', .2), ('real_handler', 12), ('cycles', .2), ('sender', 2)]
+timeline_combined = [('sender', 2), ('cycles', .2), ('real_handler', 2), ('cycles', .2), ('host_dma', 4), ('cycles', .2), ('real_handler', 2), ('cycles', .2), ('sender', 2)]
+
+idx1, idx2 = 0, 0
+
+segments = []
+labels = []
+while idx1 < len(timeline_pspin) or idx2 < len(timeline_combined):
+    tp, vp = timeline_pspin[idx1]
+    tc, vc = timeline_combined[idx2]
+    if tp == tc:
+        segments.append([vp, vc])
+        labels.append(tp)
+        idx1 += 1
+        idx2 += 1
     else:
-        ax.stackplot('len', *indices, data=trial)
-        ax.axhline(y=host_avg, linestyle='--', color='purple')
+        # assuming that len(pspin) < len(combined)
+        segments.append([0, vc])
+        labels.append(tc)
+        idx2 += 1
 
-    # plot error bars of e2e latencies
-    ax.errorbar('len', 'e2e', (trial['e2e_lo'], trial['e2e_hi']), data=trial, fmt='none', label=None, ecolor='black')
+yticks = ['F', 'H+F']
+
+ax = fig.add_subplot(gs[0, :])
+left = np.zeros(2)
+for s, l in zip(segments, labels):
+    ax.barh(range(2), width=s, height=0.6, color=color_dict[l], left=left)
+    left += np.array(s)
+
+ax.set_yticks(range(2), yticks)
+ax.tick_params('x', which='both', bottom=False, top=False, labelbottom=False)
+ax.set_xlabel('Handler Execution Timeline')
+ax.invert_yaxis()
 
 fig.legend(bbox_to_anchor=(1, .5), loc='center right')
-fig.tight_layout(rect=[0, 0, .80, 1])
+fig.tight_layout(rect=[0, 0, .75, 1])
 fig.savefig('pingpong-breakdown.pdf')
