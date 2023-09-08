@@ -77,7 +77,7 @@ def consume_trials(key, trials):
 
             real_handler = icmp_handler - cycles
             if do_host == 'true':
-                real_handler -= icmp_host_dma - cycles
+                real_handler -= icmp_host_dma + cycles
                 host_dma = icmp_host_dma - cycles
                 all_cycles = cycles * 5
             else:

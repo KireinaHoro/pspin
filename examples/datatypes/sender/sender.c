@@ -268,7 +268,7 @@ int main(int argc, char *argv[]) {
     // send streambuf in SLMP
     slmp_sock_t sock;
     // datatypes require word alignment
-    if (slmp_socket(&sock, true, 4)) {
+    if (slmp_socket(&sock, 1, 4, args.slmp_ipg, 1)) {
       perror("open socket");
       goto mpi_fini;
     }
@@ -321,7 +321,7 @@ int main(int argc, char *argv[]) {
         }
         // no flow control for now
         slmp_sendmsg(&sock, from.sin_addr.s_addr, msgid, bufs.streambuf,
-                     bufs.streambuf_size, args.slmp_ipg);
+                     bufs.streambuf_size);
       }
 
       free_buffers(&bufs);

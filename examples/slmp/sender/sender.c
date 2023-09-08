@@ -22,8 +22,8 @@
 struct arguments {
   const char *server_addr;
   const char *filename;
-  bool force_ack;
-  bool parallel;
+  int wnd_sz;
+  int num_threads;
   int interval;
   int length;
 };
@@ -35,8 +35,8 @@ static struct argp_option options[] = {
     {"server", 's', "IP", 0, "IP address of the server"},
     {"file", 'f', "FILE", 0, "file to send"},
     {"interval", 'i', "NUM", 0, "per-packet interval to wait for SLMP"},
-    {"ack", 'a', 0, 0, "force SLMP ack on every packet"},
-    {"parallel", 'p', 0, 0, "parallel send on SLMP socket"},
+    {"window", 'w', "NUM", 0, "SLMP send window size"},
+    {"threads", 't', "NUM", 0, "number of threads to send SLMP message"},
     {"length", 'l', "NUM", 0, "send <length> bytes instead of the whole file"},
     {0},
 };
@@ -54,11 +54,11 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   case 'i':
     args->interval = atoi(arg);
     break;
-  case 'a':
-    args->force_ack = true;
+  case 'w':
+    args->wnd_sz = atoi(arg);
     break;
-  case 'p':
-    args->parallel = true;
+  case 't':
+    args->num_threads = atoi(arg);
     break;
   case 'l':
     args->length = atoi(arg);
@@ -76,7 +76,7 @@ static inline double curtime() {
 }
 
 int main(int argc, char *argv[]) {
-  struct arguments args = {0};
+  struct arguments args = {.num_threads = 1, .wnd_sz = 16};
   static struct argp argp = {options, parse_opt, NULL, doc};
   argp_program_version = "slmp-sender 1.0";
   argp_program_bug_address = "Pengcheng Xu <pengxu@ethz.ch>";
@@ -116,8 +116,6 @@ int main(int argc, char *argv[]) {
     printf("File size: %d\n", args.length);
 
     rewind(fp);
-  } else {
-    fprintf(stderr, "sending the first %d bytes\n", args.length);
   }
   uint8_t *file_buf = malloc(args.length);
   if (!file_buf) {
@@ -134,8 +132,8 @@ int main(int argc, char *argv[]) {
 
   slmp_sock_t sock;
   // TODO: experiment with different aligns for speed
-  if (slmp_socket(&sock, args.force_ack, DMA_ALIGN, args.interval,
-                  args.parallel)) {
+  if (slmp_socket(&sock, args.wnd_sz, DMA_ALIGN, args.interval,
+                  args.num_threads)) {
     perror("open socket");
     goto free_buf;
   }
