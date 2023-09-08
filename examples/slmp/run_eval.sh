@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 
-set -eux
+set -eu
 
 fatal() {
     echo "$@" >&2
     exit 1
 }
 
-launches=50
+launches=20
+pcie_path="1d:00.0"
+max_tries=$((launches * 10))
 pspin="10.0.0.1"
 bypass="10.0.0.2"
 data_root="data"
 start_sz=100
-largest_sz=2000000
+window_sizes=(1 4 16 64 256 512 1024)
+thread_counts=(1 2 4 8 16 32 64)
+largest_sz=$((256 * 1024 * 1024))
 pspin_utils="$(realpath ../../../../utils)"
 
 mkdir -p $data_root
@@ -30,10 +34,48 @@ trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
 do_netns="sudo ip netns exec"
 
-# check if netns is correctly setup
-if ! $do_netns pspin ip a | grep $pspin; then
-    fatal "PsPIN NIC not found in netns.  Please rerun setup"
-fi
+kill_slmp() {
+    sudo killall -9 slmp &>/dev/null || true
+
+    sleep 0.5
+}
+
+scan_till_online() {
+    while true; do
+        sudo bash -c 'echo 1 > /sys/bus/pci/rescan'
+        if [[ -L /sys/bus/pci/devices/0000:$pcie_path ]]; then
+            echo Device back online!
+            break
+        else
+            echo -n R
+            sleep 5
+        fi
+    done
+}
+
+reset_device() {
+    kill_slmp
+
+    scan_till_online
+
+    sudo $pspin_utils/mqnic-fw -d $pcie_path -b -y
+
+    scan_till_online
+
+    sudo $pspin_utils/setup-netns.sh off || true
+    sudo $pspin_utils/setup-netns.sh on
+}
+
+launch_receiver_clean() {
+    need_launches=$1
+
+    kill_slmp
+
+    # XXX: ideally we could use a tighter -m, but somehow this triggers IOMMU pagefaults
+    #      we just use 512 MB for now
+    sudo host/slmp -o $out_prefix.csv -m $((512 * 1024 * 1024)) -e $need_launches &> $out_prefix.log &
+    sleep 0.2
+}
 
 # start stdout capture
 sudo $pspin_utils/cat_stdout.py --dump-files --clean &>/dev/null &
@@ -43,27 +85,48 @@ CAT_STDOUT_PID=$!
 src_file=slmp-file-random.dat
 dd if=/dev/urandom of=$src_file bs=$largest_sz count=1
 
-sudo killall slmp || true # cleanup stale failures
+reset_device
 
-for do_ack in 0 1; do
-    for (( sz = $start_sz; sz <= $largest_sz; sz *= 2 )); do
-        # XXX: ideally we could use a tighter -m, but somehow this triggers IOMMU pagefaults
-        #      we just use 128 MB for now
-        sudo host/slmp -o $data_root/$do_ack-$sz.csv -m $((128 * 1024 * 1024)) -e $launches &>/dev/null &
-        sleep 1
-
-        out_file=$data_root/$do_ack-$sz-sender.txt
-        rm -f $out_file
-        ack=
-        if [[ $do_ack == 1 ]]; then
-            ack="-a"
+for wnd_sz in ${window_sizes[@]}; do
+    for threads in ${thread_counts[@]}; do
+        if (( wnd_sz < threads )); then
+            # skip since each thread will have at least one window
+            continue
         fi
-        for (( lid = 0; lid < $launches; lid++ )); do
-            $do_netns bypass sender/slmp_sender -f $src_file -s $pspin -l $sz $ack >> $out_file || echo "Timed out!"
-            sleep 0.1
-        done
+        for (( sz = start_sz; sz <= largest_sz; sz *= 2 )); do
+            if (( wnd_sz * 1408 > sz )); then
+                # skip since we'll never saturate the window
+                continue
+            fi
+            out_prefix=$data_root/$sz-$wnd_sz-$threads
 
-        sleep 1
+            echo "Size $sz; window size $wnd_sz; threads $threads"
+
+            rm -f $out_prefix-sender.txt
+
+            launch_receiver_clean $launches
+
+            good_runs=0
+            for (( lid = 0; lid < max_tries; lid++ )); do
+                if $do_netns bypass sender/slmp_sender -f $src_file -s $pspin -l $sz -w $wnd_sz -t $threads &>> $out_prefix-sender.txt; then
+                    echo -n .
+                    if (( ++good_runs >= launches )); then
+                        echo Achieved required $launches runs
+                        break
+                    fi
+                else
+                    retval=$?
+                    echo "Timed out!"
+                    # Rationale: always start clean
+                    # for SYN failures: reset the device first
+                    if (( retval < 255 )); then
+                        reset_device
+                    fi
+
+                    launch_receiver_clean $((launches - good_runs))
+                fi
+            done
+        done
     done
 done
 
