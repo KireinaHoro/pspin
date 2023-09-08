@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eux
+set -eu
 
 mpiexec="mpiexec"
 pspin="10.0.0.1"
@@ -11,7 +11,7 @@ count_par=20
 trials_count="1 $(seq 2 2 20)"
 par_count=16
 data_root="data"
-datatype_str="hvec(2 1 18432)[hvec(2 1 12288)[hvec(2 1 6144)[vec(32 6 8)[ctg(18)[float]]]]]"
+datatypes=("hvec(2 1 18432)[hvec(2 1 12288)[hvec(2 1 6144)[vec(32 6 8)[ctg(18)[float]]]]]" "ctg(27648)[float]")
 datatype_bin="ddt.bin"
 
 # 60% peak GEMM validation, allow up to 5 misses, require 5 hits
@@ -27,7 +27,7 @@ do_parallel=0
 do_msg_size=0
 do_baseline=0
 vanilla_corundum=0
-while getopts "bpmv" OPTION; do
+while getopts "bpmvt:" OPTION; do
     case $OPTION in
     b)
         do_baseline=1
@@ -38,6 +38,9 @@ while getopts "bpmv" OPTION; do
     m)
         do_msg_size=1
         ;;
+    t)
+        datatype_idx=$OPTARG
+        ;;
     v)
         vanilla_corundum=1
         ;;
@@ -46,6 +49,17 @@ while getopts "bpmv" OPTION; do
         ;;
     esac
 done
+
+if [[ -z ${datatype_idx+x} ]]; then
+    fatal "Need to specify datatype ID (-t)"
+fi
+
+if (( $datatype_idx >= ${#datatypes[@]} )); then
+    fatal "Datatype ID $datatype_idx not found!"
+fi
+
+datatype_str="${datatypes[$datatype_idx]}"
+mkdir -p $data_root
 
 # environment
 source ../../sourceme.sh
