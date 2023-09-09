@@ -5,11 +5,14 @@ import argparse
 import re
 import numpy as np
 import pandas as pd
+import scipy.stats as st
 import sys
 from math import ceil
 
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, join, isdir
+
+from plot_lib import *
 
 parser = argparse.ArgumentParser(
     prog='plot.py',
@@ -25,27 +28,47 @@ def dim_to_gflops(dim, iter, elapsed):
     return 2 * dim ** 3 * iter / elapsed / 1e9
 def rtt_to_mbps(sbuf_sz, num_parallel, rtt):
     return sbuf_sz * 8 * num_parallel / rtt / 1e6
-def cycles_to_us(cycles):
-    return 1e6 / pspin_freq * cycles
 
 slmp_payload_size = 1462 // 4 * 4
-pspin_freq = 40e6 # 40 MHz
-parallel_pkl = 'parallel.pkl'
-msg_size_pkl = 'msg_size.pkl'
+elem_size = 110592 # one element
+data_pkl = 'data.pkl'
 
-dgemm_theo_label = 'GEMM Theoretical'
-dgemm_ref_label = 'GEMM Reference'
-dgemm_overlap_label = 'GEMM Overlap'
-
-dt_mpich_vanilla_label = 'Datatypes MPICH/Corundum'
-dt_mpich_fpspin_label = 'Datatypes MPICH/FPsPIN'
-dt_ref_label = 'Datatypes Reference'
-dt_overlap_label = 'Datatypes Overlap'
-
-iperf_vanilla = 'Datatypes IPerf/Corundum'
-
-def consume_trials(key, full_key, trials, num_parallel_func):
+def consume_trials(key, full_key, dt_idx, trials):
     # https://stackoverflow.com/a/42837693/5520728
+    def append_iperf(par, mbps):
+        global data
+        entry = pd.DataFrame.from_dict({
+            'parallelism': [par],
+            'mbps_iperf': [mbps],
+        })
+        data = pd.concat([data, entry], ignore_index=True)
+
+    def append_mpich(par, sbuf_size, is_vanilla, mbps, dtype_idx):
+        global data
+        entry = pd.DataFrame.from_dict({
+            'parallelism': [par],
+            'msg_size': [sbuf_size],
+            'is_vanilla': [is_vanilla],
+            'mbps_mpich': [mbps],
+            'datatype': [dtype_idx],
+        })
+        data = pd.concat([data, entry], ignore_index=True)
+
+    def append_overlap(par, sbuf_size, dtype_idx, mbps_ref, mbps_overlap, gflops_theo, gflops_ref, gflops_overlap, overlap_ratio):
+        global data
+        entry = pd.DataFrame.from_dict({
+            'parallelism': [par],
+            'msg_size': [sbuf_size],
+            'datatype': [dtype_idx],
+            'mbps_ref': [mbps_ref],
+            'mbps_overlap': [mbps_overlap],
+            'gflops_theo': [gflops_theo],
+            'gflops_ref': [gflops_ref],
+            'gflops_overlap': [gflops_overlap],
+            'overlap_ratio': [overlap_ratio],
+        })
+        data = pd.concat([data, entry], ignore_index=True)
+
     def append_row(num, type, value):
         global data
         entry = pd.DataFrame.from_dict({
@@ -59,7 +82,8 @@ def consume_trials(key, full_key, trials, num_parallel_func):
         # iperf theoretical data
         iperf_dat = [9.22, 10.4, 8.36, 8.49, 7.75, 8.66, 7.63, 8.60, 8.70, 7.89, 7.92, 8.16, 7.87, 8.07, 7.31, 7.78]
         for par, gbps in enumerate(iperf_dat):
-            append_row(par + 1, iperf_vanilla, gbps * 1000)
+            append_iperf(par + 1, gbps * 1000)
+
         return
 
     for t in trials:
@@ -79,34 +103,30 @@ def consume_trials(key, full_key, trials, num_parallel_func):
             continue
         val = float(val)
 
-        fname = join(args.data_root, t)
+        fname = join(args.data_root, dt_idx, t)
         print(f'Consuming {fname}')
         with open(fname, 'r') as f:
             reader = csv.reader(f)
             if baseline:
                 # MPICH
-                label = dt_mpich_vanilla_label if vanilla else dt_mpich_fpspin_label 
-                assert next(reader) == ['elements', 'parallel', 'streambuf_size', 'types_str']
-                *params, types_str = next(reader)
+                assert next(reader) == ['elements', 'parallel', 'streambuf_size', 'types_idx', 'types_str']
+                *params, types_idx, types_str = next(reader)
                 elem, par, sbuf_size = map(int, params)
 
                 assert next(reader) == []
                 assert next(reader) == ['elapsed']
                 for dat in reader:
                     elapsed, = map(float, dat)
-
-                    append_row(val, label, rtt_to_mbps(sbuf_size, par, elapsed))
+                    append_mpich(par, sbuf_size, vanilla, rtt_to_mbps(sbuf_size, par, elapsed), types_idx)
 
             else:
-                num_parallel = num_parallel_func(val)
-
-                assert next(reader) == ['gflops_theo', 'gflops_ref', 'dim', 'streambuf_size']
-                tg, rg, dim, sbuf_size = [float(x) for x in next(reader)]
+                assert next(reader) == ['gflops_theo', 'gflops_ref', 'dim', 'streambuf_size', 'par', 'types_idx']
+                *params, types_idx = next(reader)
+                tg, rg, dim, sbuf_size, par = map(float, params)
                 num_packets = ceil(sbuf_size / slmp_payload_size)
 
-                append_row(val, dgemm_theo_label, tg)
-                # dgemm w/o dt
-                append_row(val, dgemm_ref_label, rg)
+                # append_row(val, dgemm_theo_label, tg)
+                # append_row(val, dgemm_ref_label, rg)
                 assert next(reader) == []
 
                 assert next(reader) == ['dgemm', 'iters', 'dt_ref_rtt',
@@ -118,184 +138,122 @@ def consume_trials(key, full_key, trials, num_parallel_func):
                     dt_pkt *= num_packets
                     dt_ref_pkt *= num_packets
 
-                    append_row(val, dgemm_overlap_label, dim_to_gflops(dim, dgemm_iter, dgemm_overlap))
-                    append_row(val, dt_ref_label, rtt_to_mbps(sbuf_size, num_parallel, dt_ref_rtt))
-                    append_row(val, 'dt_ref_rtt_us', dt_ref_rtt * 1e6)
-                    append_row(val, 'dt_ref_pkt_us', cycles_to_us(dt_ref_pkt))
-                    append_row(val, 'dt_ref_msg_us', cycles_to_us(dt_ref_msg))
-                    append_row(val, dt_overlap_label, rtt_to_mbps(sbuf_size, num_parallel, dt_rtt))
-                    append_row(val, 'dt_overlap_rtt_us', dt_rtt * 1e6)
-                    append_row(val, 'dt_overlap_pkt_us', cycles_to_us(dt_pkt))
-                    append_row(val, 'dt_overlap_msg_us', cycles_to_us(dt_msg))
-
-                    # use KB message sizes
-                    overlap_key = sbuf_size / 1000 if key == 'm' else val
-                        
-                    append_row(overlap_key, 'overlap', dgemm_overlap / dt_rtt)
+                    append_overlap(par, sbuf_size, types_idx,
+                        rtt_to_mbps(sbuf_size, par, dt_ref_rtt),
+                        rtt_to_mbps(sbuf_size, par, dt_rtt),
+                        tg, rg,
+                        dim_to_gflops(dim, dgemm_iter, dgemm_overlap),
+                        dgemm_overlap / dt_rtt)
 
 if args.data_root:
-    trials = [f for f in listdir(args.data_root) if isfile(join(args.data_root, f))]
-    data = pd.DataFrame(columns=['parallelism', 'type', 'value'])
-    consume_trials('p', 'parallelism', trials, lambda x: x) # num_parallel is the key value
+    datatypes_indices = [d for d in listdir(args.data_root) if isdir(join(args.data_root, d))]
+
+    data = pd.DataFrame(columns=[
+        'parallelism',
+        'msg_size',
+        'is_vanilla',
+        'datatype',
+        'gflops_theo',
+        'gflops_ref',
+        'gflops_overlap',
+        'mbps_iperf',
+        'mbps_mpich',
+        'mbps_ref',
+        'mbps_overlap',
+        'overlap_ratio'])
     consume_trials('i', 'parallelism', None, None)
-    data.to_pickle(parallel_pkl)
 
-    data = pd.DataFrame(columns=['msg_size', 'type', 'value'])
-    consume_trials('m', 'msg_size', trials, lambda _: 16)
-    data.to_pickle(msg_size_pkl)
+    for d in datatypes_indices:
+        trials = [f for f in listdir(join(args.data_root, d)) if isfile(join(args.data_root, d, f))]
+        consume_trials('p', 'parallelism', d, trials) # num_parallel is the key value
 
-import matplotlib.pyplot as plt
-import matplotlib.text as mtext
+    data.to_pickle(data_pkl)
 
-# https://stackoverflow.com/a/71540238/5520728
-class LegendTitle(object):
-    def __init__(self, text_props=None):
-        self.text_props = text_props or {}
-        super(LegendTitle, self).__init__()
+set_style()
 
-    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
-        x0, y0 = handlebox.xdescent, handlebox.ydescent
-        title = mtext.Text(x0, y0, orig_handle, **self.text_props)
-        handlebox.add_artist(title)
-        return title
+dp: pd.DataFrame = pd.read_pickle(data_pkl)
 
-params = {
-    'font.family': 'Helvetica Neue',
-    'font.weight': 'light',
-    'axes.titleweight': 'bold',
+lb = TitledLegendBuilder()
+
+# title: [(name, column, {filter_key: filter_val})]
+tasks_dt_tput = {
+    '': [
+        ('IPerf3', 'mbps_iperf', {}),
+    ],
+    'Baseline MPICH': [
+        ('C. Simple', 'mbps_mpich', {'is_vanilla': True, 'datatype': '1'}),
+        ('C. Complex', 'mbps_mpich', {'is_vanilla': True, 'datatype': '0'}),
+        ('F. Simple', 'mbps_mpich', {'is_vanilla': False, 'datatype': '1'}),
+        ('F. Complex', 'mbps_mpich', {'is_vanilla': False, 'datatype': '0'}),
+    ],
+    'Datatypes': [
+        ('Ref. Simple', 'mbps_ref', {'datatype': '1'}),
+        ('Ref. Complex', 'mbps_ref', {'datatype': '0'}),
+        ('Ovlp. Simple', 'mbps_overlap', {'datatype': '1'}),
+        ('Ovlp. Complex', 'mbps_overlap', {'datatype': '0'}),
+    ],
 }
-plt.rcParams.update(params)
 
-dp: pd.DataFrame = pd.read_pickle(parallel_pkl)
-
-fig1, ax1 = plt.subplots()
-
-task_dict = {}
-
-for lbl in [dt_ref_label, dt_overlap_label, dt_mpich_fpspin_label, dt_mpich_vanilla_label, iperf_vanilla]:
-    task, experiment = lbl.split(' ')
-    
-    val = dp[dp['type'] == lbl].groupby('parallelism')['value']
-    val.mean().plot(x='parallelism', y='value', yerr=val.std(), ax=ax1, label=lbl)
-
-    task_dict.setdefault(task, {})[experiment] = ax1.lines[-1]
+# diagram 1: 1 row, 2 cols
+#   plot 1: dt tput - degree of parallelism
+#   plot 2: dt tput - length of message
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize(5/3), sharey=True)
 
 ax1.grid(which='both')
-ax1.set_xlabel('Degree of Parallelism')
+ax2.grid(which='both')
 ax1.set_ylabel('Throughput (Mbps)')
 ax1.set_yscale('log')
+ax2.set_yscale('log')
+ax1.set_xlabel('Degree of Parallelism')
+ax2.set_xlabel('Message Length (B)')
 
-graphics, texts = [], []
-for idx, (k, kv) in enumerate(task_dict.items()):
-    graphics.append(k)
-    texts.append('')
-    for kk, vv in kv.items():
-        graphics.append(vv)
-        texts.append(kk)
+ax1.label_outer()
+ax2.label_outer()
+
+def line_x(x_col, ax, lb, y_col):
+    x = []
+    y_median = []
+    y_left = []
+    y_right = []
+    for xx, rows in trial.groupby(x_col):
+        # print(f'plotting {xx} {rows}')
+        x.append(xx)
+        vals = rows[y_col].dropna()
+        # print(y_col, rows[y_col])
+        med = vals.median()
+        y_median.append(med)
+        if len(vals) > 1:
+            bootstrap_ci = st.bootstrap((vals,), np.median, confidence_level=0.95, method='percentile')
+            ci_lo, ci_hi = bootstrap_ci.confidence_interval
+            y_left.append(med - ci_lo)
+            y_right.append(ci_hi - med)
+        else:
+            y_left.append(0)
+            y_right.append(0)
+
+    if lbl == 'IPerf3':
+        # print(x, y_median)
+        ax.plot(x, y_median, linestyle='--', color='purple')
+    else:
+        ax.errorbar(x, y_median, yerr=(y_left, y_right), ecolor='black')
+    lb.push(cat, lbl, ax.lines[-1])
+
+for cat, lines in tasks_dt_tput.items():
+    # print(cat, lines)
+    for lbl, col, filter_kv in lines:
+        trial = dp
+
+        for k, v in filter_kv.items():
+            trial = trial[trial[k] == v]
+
+        line_x('parallelism', ax1, lb, col)
+        line_x('msg_size', ax2, lb, col)
     
-    if idx != len(task_dict) - 1:
-        graphics.append('')
-        texts.append('')
+lb.draw(fig)
+fig.savefig('datatypes-tput.pdf')
 
-fig1.legend(graphics, texts, handler_map={str: LegendTitle({'fontsize': 11, 'weight': 'normal'})}, loc='lower right')
+# diagram 2: 1 row, 2 cols
+#   plot 1: gemm tput - length of message
+#   plot 2: overlap ratio - length of message
 
-fig1.savefig('p1.pdf')
-
-sys.exit(0)
-
-parallel_title = 'Degree of Parallelism'
-
-# plot 1: dgemm tput & dt bw over parallelism
-bw_title = 'Datatypes Bandwidth (Mbps)'
-bw_base = base.transform_filter(
-    alt.FieldOneOfPredicate(field='type', oneOf=[dt_ref_label, dt_overlap_label, dt_mpich_fpspin_label, dt_mpich_vanilla_label])
-)
-bw_mean = bw_base.mark_line().encode(
-    x=alt.X('parallelism').title(''),
-    y=alt.Y('mean(value)').title(bw_title).scale(alt.Scale(type='log')),
-    color='type',
-)
-bw_err = bw_base.mark_errorbar(extent='stdev').encode(
-    x=alt.X('parallelism'),
-    y=alt.Y('value').title(bw_title),
-    color='type'
-)
-bw_theo = base.mark_rule(strokeWidth=2).encode(
-    y='mean(value)',
-    strokeDash='type'
-).transform_filter(
-    (datum.type == iperf_vanilla)
-)
-
-bw_chart = (bw_mean + bw_err + bw_theo).properties(width=400, height=150)
-
-tput_base = base.transform_filter(
-    (datum.type == dgemm_ref_label) | (datum.type == dgemm_overlap_label)
-)
-tput_title = 'GEMM Throughput (GFLOPS)'
-tput_mean = tput_base.mark_line().encode(
-    x=alt.X('parallelism').title(parallel_title),
-    y=alt.Y('mean(value)').title(tput_title).scale(domain=[80,250]),
-    color=alt.Color('type', title=None),
-)
-tput_err = tput_base.mark_errorbar(extent='stdev').encode(
-    x=alt.X('parallelism'),
-    y=alt.Y('value').title(tput_title),
-    color='type'
-)
-tput_theo = base.mark_rule(strokeWidth=2).encode(
-    y=alt.Y('mean(value)'),
-    strokeDash=alt.StrokeDash('type', title=None),
-).transform_filter(
-    (datum.type == dgemm_theo_label)
-)
-
-tput_chart = (tput_mean + tput_err + tput_theo).properties(width=400, height=150)
-
-'''
-# double y axis
-alt.layer(bw_chart, tput_chart).resolve_scale(
-    y='independent'
-).properties(width=400, height=200).save('plot1.json')
-'''
-# vertically concatenated
-alt.vconcat(bw_chart, tput_chart).resolve_scale(
-    x='shared'
-).save('plot1.json')
-
-# plot overlapping ratio
-data_msg = pd.read_pickle(msg_size_pkl)
-base = alt.Chart(data_msg)
-
-overlap_title = 'Overlap'
-overlap_base = base.transform_filter(
-    (datum.type == 'overlap')
-)
-overlap_avg = overlap_base.mark_line().encode(
-    x=alt.X('msg_size').title('Message Size (KB)'),
-    y=alt.Y('mean(value)', axis=alt.Axis(format='.0%')).title(overlap_title).scale(domain=[.6, 1]),
-)
-overlap_err = overlap_base.mark_errorbar(extent='stdev').encode(
-    x=alt.X('msg_size'),
-    y=alt.Y('value').title(overlap_title),
-)
-
-(overlap_avg + overlap_err).properties(width=400, height=200).save('plot2.json')
-
-# plot 2.1: overlapping ratio, x=parallelism
-base = alt.Chart(data_par)
-
-overlap_title = 'Overlap'
-overlap_base = base.transform_filter(
-    (datum.type == 'overlap')
-)
-overlap_avg = overlap_base.mark_line().encode(
-    x=alt.X('parallelism').title(parallel_title),
-    y=alt.Y('mean(value)', axis=alt.Axis(format='.0%')).title(overlap_title).scale(domain=[.6, 1]),
-)
-overlap_err = overlap_base.mark_errorbar(extent='stdev').encode(
-    x=alt.X('parallelism'),
-    y=alt.Y('value').title(overlap_title),
-)
-
-(overlap_avg + overlap_err).properties(width=400, height=200).save('plot2-1.json')
+fig.savefig('datatypes-overlap.pdf')

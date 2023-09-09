@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
           msgid =
               htonl(i); // small-endian for MPQ -- slmp_sendmsg will swap again
         }
-        // no flow control for now
+
         slmp_sendmsg(&sock, from.sin_addr.s_addr, msgid, bufs.streambuf,
                      bufs.streambuf_size);
       }
