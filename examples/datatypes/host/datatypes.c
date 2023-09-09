@@ -203,55 +203,20 @@ static inline datatypes_data_t *to_data_ptr(fpspin_ctx_t *ctx) {
   return (datatypes_data_t *)ctx->app_data;
 }
 
-static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
-  ctx->app_data = malloc(sizeof(datatypes_data_t));
-  datatypes_data_t *app_data = to_data_ptr(ctx);
-  app_data->file_id = 0;
+// setup the NIC state. will be executed on retries in case the core faults
+static int setup_datatypes_spin(fpspin_ctx_t *ctx) {
+  datatypes_data_t *app_data = ctx->app_data;
+
   app_data->num_received = 0;
 
-  app_data->A = app_data->B = app_data->C = NULL;
-
-  app_data->args = (struct arguments){
-      .pspin_dev = "/dev/pspin0",
-      .dest_ctx = 0,
-      .mode = MODE_BENCHMARK,
-      .num_iterations = 100,
-      .num_misses = 5,
-      .dgemm_margin = 0.6,
-      .num_trials = 10,
-      .num_parallel_msgs = 1,
-      .measure_iters = 20,
-      .rts_port = RTS_PORT,
-      .tune_num_hits = 10,
-      .tune_dim_start = 1000,
-      .tune_dim_step = 10,
-  };
-
-  static struct argp argp = {options, parse_opt, args_doc, doc};
-  argp_program_version = "datatypes 1.0";
-  argp_program_bug_address = "Pengcheng Xu <pengxu@ethz.ch>";
-
-  if (argp_parse(&argp, argc, argv, 0, 0, &app_data->args)) {
-    return -1;
-  }
   struct arguments *args = &app_data->args;
-
-  // check arguments
-  if (!args->out_file) {
-    fprintf(stderr, "error: no output file specified (see --help)\n");
-    return -1;
-  }
-  if (!args->rts_server) {
-    fprintf(stderr, "error: no sender rts IP address specified (see --help)\n");
-    return -1;
-  }
 
   fpspin_ruleset_t rs;
   fpspin_ruleset_slmp(&rs);
   if (!fpspin_init(ctx, args->pspin_dev, __IMG__, args->dest_ctx, &rs, 1,
                    FPSPIN_HOSTDMA_PAGES_DEFAULT + MSG_PAGES)) {
     fprintf(stderr, "failed to initialise fpspin\n");
-    return -1;
+    return EXIT_FATAL;
   }
 
   // XXX: race condition: need to finish init before enabling HER
@@ -271,25 +236,19 @@ static int setup_datatypes_spin(fpspin_ctx_t *ctx, int argc, char *argv[]) {
     fprintf(stderr, "Host DMA message buffer too small!  %#x vs %#x\n",
             SIZE_MSG, app_data->userbuf_size);
     free(datatype_mem_ptr_raw);
-    return -1;
+    return EXIT_FATAL;
   }
   printf("Streambuf size: %d\n", app_data->streambuf_size);
   if (!nic_buffer_size) {
     // ddt remap failed
-    return -1;
+    fprintf(stderr, "failed to remap ddt\n");
+    return EXIT_FATAL;
   }
 
   // copy to NIC memory
   fpspin_write_memory(ctx, nic_mem_base, nic_buffer, nic_buffer_size);
   free(nic_buffer);
   free(datatype_mem_ptr_raw);
-
-  // RTS socket
-  app_data->rts_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-  if (app_data->rts_sockfd < 0) {
-    perror("open rts socket");
-    return -1;
-  }
 
   return 0;
 }
@@ -548,6 +507,14 @@ bool check_dgemm(datatypes_data_t *app_data) {
 volatile sig_atomic_t exit_flag = 0;
 static void sigint_handler(int signum) { exit_flag = 1; }
 
+int reset_device(fpspin_ctx_t *ctx) {
+  printf("Shutting down the execution context...\n");
+  fpspin_exit(ctx);
+
+  printf("Rerunning setup...\n");
+  return setup_datatypes_spin(ctx);
+}
+
 int poll_all(fpspin_ctx_t *ctx, msg_handler_t func) {
   int poll_tries = 1000000;
   while (!query_once(ctx, func)) {
@@ -556,7 +523,10 @@ int poll_all(fpspin_ctx_t *ctx, msg_handler_t func) {
       return EXIT_FATAL;
     }
     if (!--poll_tries) {
-      fprintf(stderr, "Tries exhausted for poll; please retry\n");
+      fprintf(stderr, "Tries exhausted for poll; resetting device\n");
+      if (reset_device(ctx)) {
+        return EXIT_FATAL;
+      }
       return EXIT_RETRY;
     }
   }
@@ -584,13 +554,57 @@ int main(int argc, char *argv[]) {
   FILE *fp;
   int dim;
   int ret = EXIT_SUCCESS;
-  fpspin_ctx_t ctx;
-  if (setup_datatypes_spin(&ctx, argc, argv)) {
+  fpspin_ctx_t ctx = {
+      .app_data = calloc(1, sizeof(datatypes_data_t)),
+  };
+  datatypes_data_t *app_data = to_data_ptr(&ctx);
+
+  app_data->args = (struct arguments){
+      .pspin_dev = "/dev/pspin0",
+      .dest_ctx = 0,
+      .mode = MODE_BENCHMARK,
+      .num_iterations = 100,
+      .num_misses = 5,
+      .dgemm_margin = 0.6,
+      .num_trials = 10,
+      .num_parallel_msgs = 1,
+      .measure_iters = 20,
+      .rts_port = RTS_PORT,
+      .tune_num_hits = 10,
+      .tune_dim_start = 1000,
+      .tune_dim_step = 10,
+  };
+
+  static struct argp argp = {options, parse_opt, args_doc, doc};
+  argp_program_version = "datatypes 1.0";
+  argp_program_bug_address = "Pengcheng Xu <pengxu@ethz.ch>";
+
+  if (argp_parse(&argp, argc, argv, 0, 0, &app_data->args)) {
+    return EXIT_FATAL;
+  }
+
+  struct arguments *args = &app_data->args;
+  // check arguments
+  if (!args->out_file) {
+    fprintf(stderr, "error: no output file specified (see --help)\n");
+    return EXIT_FATAL;
+  }
+  if (!args->rts_server) {
+    fprintf(stderr, "error: no sender rts IP address specified (see --help)\n");
+    return EXIT_FATAL;
+  }
+
+  if (setup_datatypes_spin(&ctx)) {
     ret = EXIT_FATAL;
     goto fail;
   }
-  datatypes_data_t *app_data = to_data_ptr(&ctx);
-  struct arguments *args = &app_data->args;
+
+  // RTS socket
+  app_data->rts_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (app_data->rts_sockfd < 0) {
+    perror("open rts socket");
+    return EXIT_FATAL;
+  }
 
   // setup signal handler
   struct sigaction sa = {
@@ -610,6 +624,9 @@ int main(int argc, char *argv[]) {
 
     // receive one message and exit
     ret = poll_all(&ctx, dump_userbuf);
+    if (ret == EXIT_RETRY) {
+      fprintf(stderr, "not trying to reset device in reference mode\n");
+    }
   } else {
     fp = fopen(args->out_file, "w");
     if (!fp) {
@@ -632,6 +649,7 @@ int main(int argc, char *argv[]) {
     }
 
     // run reference datatypes
+    int resets_left = RESET_TRIES;
     for (int i = 0; i < args->measure_iters; ++i) {
       fpspin_clear_counter(&ctx, 0); // pkt
       fpspin_clear_counter(&ctx, 1); // msg
@@ -639,6 +657,17 @@ int main(int argc, char *argv[]) {
       send_rts(&ctx);
       double start = curtime();
       if ((ret = poll_all(&ctx, NULL))) {
+        if (ret == EXIT_RETRY) {
+          if (--resets_left > 0) {
+            fprintf(stderr,
+                    "resetting device and retrying (%d tries left)...\n",
+                    resets_left);
+            --i;
+            continue;
+          } else {
+            fprintf(stderr, "resets exhausted, bailing out\n");
+          }
+        }
         goto fail;
       }
       double rtt = curtime() - start;
@@ -651,6 +680,8 @@ int main(int argc, char *argv[]) {
       printf("Reference datatypes: %lf Mbps\n", ref_mbps);
     }
 
+    resets_left = RESET_TRIES;
+
     // tune dgemm size
     dim = args->tune_dim_start;
     int hit = 0;
@@ -661,7 +692,7 @@ int main(int argc, char *argv[]) {
       if (!res) {
         printf("Trial dim=%d hit!\n", dim);
         ++hit;
-      } else {
+      } else if (res > 0) {
         if (res == 1) {
           printf("Trial dim=%d dgemm too short\n", dim);
           dim += args->tune_dim_step;
@@ -669,7 +700,8 @@ int main(int argc, char *argv[]) {
           printf("Trial dim=%d dgemm too long\n", dim);
           dim -= args->tune_dim_step;
         } else {
-          ret = -res;
+          printf("Unknown step %d!\n", res);
+          ret = EXIT_FATAL;
           goto fail;
         }
         if (hit) {
@@ -678,6 +710,19 @@ int main(int argc, char *argv[]) {
             args->tune_dim_step /= 2;
         }
         hit = 0;
+      } else {
+        ret = -res;
+        if (ret == EXIT_RETRY) {
+          if (--resets_left > 0) {
+            fprintf(stderr,
+                    "resetting device and retrying (%d tries left)...\n",
+                    resets_left);
+            continue;
+          } else {
+            fprintf(stderr, "resets exhausted, bailing out\n");
+          }
+        }
+        goto fail;
       }
       if (exit_flag) {
         fprintf(stderr, "Received SIGINT, exiting...\n");
@@ -686,12 +731,20 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    resets_left = RESET_TRIES;
+
     // run overlapping trial
     for (int i = 0; i < args->measure_iters; ++i) {
       printf("\n==> Tuned trial run:\n");
       setup_trial(&ctx, dim);
       if ((ret = run_trial(&ctx, i)) < 0) {
         ret = -ret;
+        if (ret == EXIT_RETRY && --resets_left > 0) {
+          fprintf(stderr, "resetting device and retrying (%d tries left)...\n",
+                  resets_left);
+          --i;
+          continue;
+        }
         goto fail;
       }
     }

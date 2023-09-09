@@ -167,7 +167,7 @@ __handler__ void datatypes_ph(handler_args_t *args) {
   uint64_t last = stream_end_offset;
 
   // int time = cycles();
-  DEBUG("[%d] P@%p: [%d:%d] #%d @ %p\n", time, PKT_MEM(task),
+  DEBUG("[%d] P: [%d:%d] #%d @ %p\n", PKT_MEM(task),
         stream_start_offset, stream_end_offset, flowid, my_state);
 
 // hang if host memory not defined
