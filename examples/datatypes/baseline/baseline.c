@@ -41,6 +41,7 @@ struct arguments {
   int num_parallel;
   const char *out_file;
   const char *type_descr_str;
+  const char *type_idx;
 };
 
 static char doc[] =
@@ -50,7 +51,7 @@ static char doc[] =
     "at "
     "https://www.mcs.anl.gov/research/projects/mpi/tutorial/mpiexmpl/src3/"
     "pingpong/C/nbhead/main.html.  Refer to the thesis for more information.";
-static char args_doc[] = "TYPE_DESCR_STR";
+static char args_doc[] = "TYPE_DESCR_STR TYPE_IDX";
 
 static struct argp_option options[] = {
     {"elements", 'e', "NUM", 0, "number of elements in one datatype message"},
@@ -80,9 +81,12 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     argp_usage(state);
     break;
   case ARGP_KEY_ARG:
-    if (state->arg_num >= 1)
+    if (state->arg_num >= 2)
       argp_usage(state);
-    args->type_descr_str = arg;
+    else if (state->arg_num == 0)
+      args->type_descr_str = arg;
+    else
+      args->type_idx = arg;
     break;
   case ARGP_KEY_END:
     if (state->arg_num < 1)
@@ -221,9 +225,9 @@ int main(int argc, char *argv[]) {
   }
 
   if (fp) {
-    fprintf(fp, "elements,parallel,streambuf_size,types_str\n");
-    fprintf(fp, "%d,%d,%d,\"%s\"\n\n", args.num_elements, args.num_parallel,
-            streambuf_size, args.type_descr_str);
+    fprintf(fp, "elements,parallel,streambuf_size,types_idx,types_str\n");
+    fprintf(fp, "%d,%d,%d,%s,\"%s\"\n\n", args.num_elements, args.num_parallel,
+            streambuf_size, args.type_idx, args.type_descr_str);
     fprintf(fp, "elapsed\n");
     for (int i = 0; i < args.num_iterations; ++i) {
       fprintf(fp, "%lf\n", elapsed[i]);
