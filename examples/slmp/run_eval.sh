@@ -2,13 +2,7 @@
 
 set -eu
 
-fatal() {
-    echo "$@" >&2
-    exit 1
-}
-
 launches=20
-pcie_path="1d:00.0"
 max_tries=$((launches * 10))
 pspin="10.0.0.1"
 bypass="10.0.0.2"
@@ -17,11 +11,25 @@ start_sz=100
 window_sizes=(1 4 16 64 256 512 1024)
 thread_counts=(1 2 4 8 16 32 64)
 largest_sz=$((256 * 1024 * 1024))
-pspin_utils="$(realpath ../../../../utils)"
 
-continue_sz=52428800
-continue_wnd=1024
-continue_thr=4
+FPSPIN_PCIE_PATH="1d:00.0"
+FPSPIN_UTILS="$(realpath ../../../../utils)"
+FPSPIN_PAYLOAD="slmp"
+
+source $FPSPIN_UTILS/eval_lib.sh
+
+continue_sz=0
+continue_wnd=0
+continue_thr=0
+
+while getopts "s:w:t:" OPTION; do
+    case $OPTION in
+        s) continue_sz=$OPTARG ;;
+        w) continue_wnd=$OPTARG ;;
+        t) continue_thr=$OPTARG ;;
+        *) fatal "Incorrect options provided" ;;
+    esac
+done
 
 mkdir -p $data_root
 
@@ -36,44 +44,10 @@ make
 # https://stackoverflow.com/a/2173421/5520728
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
-do_netns="sudo ip netns exec"
-
-kill_slmp() {
-    sudo killall -9 slmp &>/dev/null || true
-
-    sleep 0.5
-}
-
-scan_till_online() {
-    while true; do
-        sudo bash -c 'echo 1 > /sys/bus/pci/rescan'
-        if [[ -L /sys/bus/pci/devices/0000:$pcie_path ]]; then
-            echo Device back online!
-            break
-        else
-            echo -n R
-            sleep 5
-        fi
-    done
-}
-
-reset_device() {
-    kill_slmp
-
-    scan_till_online
-
-    sudo $pspin_utils/mqnic-fw -d $pcie_path -b -y
-
-    scan_till_online
-
-    sudo $pspin_utils/setup-netns.sh off || true
-    sudo $pspin_utils/setup-netns.sh on
-}
-
 launch_receiver_clean() {
     need_launches=$1
 
-    kill_slmp
+    kill_payload
 
     # XXX: ideally we could use a tighter -m, but somehow this triggers IOMMU pagefaults
     #      we just use 512 MB for now
@@ -81,15 +55,13 @@ launch_receiver_clean() {
     sleep 0.2
 }
 
-# start stdout capture
-sudo $pspin_utils/cat_stdout.py --dump-files --clean &>/dev/null &
-CAT_STDOUT_PID=$!
-
 # prepare large file
 src_file=slmp-file-random.dat
 dd if=/dev/urandom of=$src_file bs=$largest_sz count=1
 
 reset_device
+
+capture_stdout
 
 for wnd_sz in ${window_sizes[@]}; do
     for threads in ${thread_counts[@]}; do
@@ -156,6 +128,6 @@ for wnd_sz in ${window_sizes[@]}; do
 done
 
 rm $src_file
-sudo kill $CAT_STDOUT_PID
+kill_stdout
 
 echo Done!
