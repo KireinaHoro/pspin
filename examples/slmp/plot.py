@@ -74,6 +74,11 @@ def consume_trials(wnd_sz, tc, trials):
         sender = el_mean - real_headtail - real_pkt - real_dma - real_notification - all_cycles
 
         tlen = tputs.__len__()
+        if lost == 1:
+            # suppress system instability
+            loss_ratio = 0
+        else:
+            loss_ratio = lost / (tlen + lost)
 
         entry = pd.DataFrame.from_dict({
             'len': [len],
@@ -90,7 +95,7 @@ def consume_trials(wnd_sz, tc, trials):
             'tput': [tput_median],
             'tput_lo': [tput_median - ci_lo],
             'tput_hi': [ci_hi - tput_median],
-            'loss_ratio': [lost / (tlen + lost)],
+            'loss_ratio': [loss_ratio],
             # normalised components
             'pkt_r': [real_pkt / el_mean],
             'headtail_r': [real_headtail / el_mean],
@@ -129,7 +134,7 @@ def gen_trial(start, end, step=2):
         yield x
         x *= step
 
-window_sizes = [*gen_trial(1, 1024, step=4)]
+window_sizes = [*gen_trial(1, 1024, step=4), 512]
 num_threads = [*gen_trial(1, 64)]
 
 plot_curated = False
@@ -210,7 +215,7 @@ if args.query:
     sys.exit(0)
 
 # Throughput
-fig, axes = plt.subplots(2, 2, figsize=figsize(5/4))
+fig, axes = plt.subplots(2, 2, figsize=figsize(1.08))
 
 legend_dict = {}
 for i in range(2):
@@ -364,7 +369,7 @@ for i in range(2):
         color = colormap(norm(lbl))
 
         trial = dp[(dp[legend_cid] == lbl)]
-        idx = trial.groupby(x)['tput'].transform(max) == trial['tput']
+        idx = trial.groupby(x)['loss_ratio'].transform(max) == trial['loss_ratio']
         trial = trial[idx].sort_values(x)
 
         ax.plot(x, 'loss_ratio', data=trial, color=color)

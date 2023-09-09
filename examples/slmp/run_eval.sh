@@ -19,6 +19,10 @@ thread_counts=(1 2 4 8 16 32 64)
 largest_sz=$((256 * 1024 * 1024))
 pspin_utils="$(realpath ../../../../utils)"
 
+continue_sz=52428800
+continue_wnd=1024
+continue_thr=4
+
 mkdir -p $data_root
 
 # environment
@@ -94,6 +98,27 @@ for wnd_sz in ${window_sizes[@]}; do
             continue
         fi
         for (( sz = start_sz; sz <= largest_sz; sz *= 2 )); do
+            if (( wnd_sz > continue_wnd )); then
+                skip=0
+            elif (( wnd_sz < continue_wnd )); then
+                skip=1
+            else
+                if (( threads > continue_thr )); then
+                    skip=0
+                elif (( threads < continue_thr )); then
+                    skip=1
+                else
+                    if (( sz < continue_sz )); then
+                        skip=1
+                    else
+                        skip=0
+                    fi
+                fi
+            fi
+            if (( skip == 1 )); then
+                continue
+            fi
+
             if (( wnd_sz * 1408 > sz )); then
                 # skip since we'll never saturate the window
                 continue
