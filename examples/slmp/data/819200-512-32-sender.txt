@@ -1,0 +1,40 @@
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003223
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003316
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003252
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003281
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003092
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003102
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003126
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003318
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003631
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003487
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003093
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003161
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003293
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003160
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.004405
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003703
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003300
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003508
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003518
+Sending SLMP message #807347813 of size 819200
+Elapsed: 0.003238

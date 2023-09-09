@@ -1,0 +1,40 @@
+Sending SLMP message #590901130 of size 52428800
+Elapsed: 0.119533
+Sending SLMP message #590901130 of size 52428800
+Elapsed: 0.095909
+Sending SLMP message #590901130 of size 52428800
+Elapsed: 0.103702
+Sending SLMP message #590901130 of size 52428800
+Elapsed: 0.133191
+Sending SLMP message #292419051 of size 52428800
+Elapsed: 0.110089
+Sending SLMP message #292419051 of size 52428800
+Elapsed: 0.118387
+Sending SLMP message #292419051 of size 52428800
+Elapsed: 0.116431
+Sending SLMP message #292419051 of size 52428800
+Elapsed: 0.110516
+Sending SLMP message #292419051 of size 52428800
+Elapsed: 0.110113
+Sending SLMP message #292419051 of size 52428800
+Elapsed: 0.110412
+Sending SLMP message #292419051 of size 52428800
+Elapsed: 0.093781
+Sending SLMP message #1050785409 of size 52428800
+Elapsed: 0.117369
+Sending SLMP message #1050785409 of size 52428800
+Elapsed: 0.121409
+Sending SLMP message #1050785409 of size 52428800
+Elapsed: 0.095251
+Sending SLMP message #1050785409 of size 52428800
+Elapsed: 0.103573
+Sending SLMP message #1050785409 of size 52428800
+Elapsed: 0.118333
+Sending SLMP message #1050785409 of size 52428800
+Elapsed: 0.103933
+Sending SLMP message #1050785409 of size 52428800
+Elapsed: 0.092516
+Sending SLMP message #757146735 of size 52428800
+Elapsed: 0.103034
+Sending SLMP message #757146735 of size 52428800
+Elapsed: 0.103742

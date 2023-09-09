@@ -1,0 +1,43 @@
+Sending SLMP message #731908986 of size 1638400
+Elapsed: 0.003534
+Sending SLMP message #731908986 of size 1638400
+Elapsed: 0.003673
+Sending SLMP message #731908986 of size 1638400
+Elapsed: 0.003781
+Sending SLMP message #731908986 of size 1638400
+Elapsed: 0.003326
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003673
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003911
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003544
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003822
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003692
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003489
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003567
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003639
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003257
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003570
+Sending SLMP message #1503046825 of size 1638400
+Elapsed: 0.003664
+timeout waiting for final drain
+Sending SLMP message #1503046825 of size 1638400
+Timed out!
+Sending SLMP message #1972496906 of size 1638400
+Elapsed: 0.003761
+Sending SLMP message #1972496906 of size 1638400
+Elapsed: 0.003509
+Sending SLMP message #1972496906 of size 1638400
+Elapsed: 0.003488
+Sending SLMP message #1972496906 of size 1638400
+Elapsed: 0.004009
+Sending SLMP message #1972496906 of size 1638400
+Elapsed: 0.003467
