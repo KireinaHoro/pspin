@@ -21,6 +21,7 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument('--data_root', help='root of the CSV files from the datatypes benchmark', default=None)
+parser.add_argument('--query', action='store_true', help='query data interactively')
 
 args = parser.parse_args()
 
@@ -33,7 +34,7 @@ slmp_payload_size = 1462 // 4 * 4
 elem_size = 110592 # one element
 data_pkl = 'data.pkl'
 
-def consume_trials(key, full_key, dt_idx, trials):
+def consume_trials(key, dt_idx, trials):
     # https://stackoverflow.com/a/42837693/5520728
     def append_iperf(par, mbps):
         global data
@@ -46,6 +47,7 @@ def consume_trials(key, full_key, dt_idx, trials):
     def append_mpich(par, sbuf_size, is_vanilla, mbps, dtype_idx):
         global data
         entry = pd.DataFrame.from_dict({
+            'key': [key],
             'parallelism': [par],
             'msg_size': [sbuf_size],
             'is_vanilla': [is_vanilla],
@@ -57,6 +59,7 @@ def consume_trials(key, full_key, dt_idx, trials):
     def append_overlap(par, sbuf_size, dtype_idx, mbps_ref, mbps_overlap, gflops_theo, gflops_ref, gflops_overlap, overlap_ratio):
         global data
         entry = pd.DataFrame.from_dict({
+            'key': [key],
             'parallelism': [par],
             'msg_size': [sbuf_size],
             'datatype': [dtype_idx],
@@ -66,15 +69,6 @@ def consume_trials(key, full_key, dt_idx, trials):
             'gflops_ref': [gflops_ref],
             'gflops_overlap': [gflops_overlap],
             'overlap_ratio': [overlap_ratio],
-        })
-        data = pd.concat([data, entry], ignore_index=True)
-
-    def append_row(num, type, value):
-        global data
-        entry = pd.DataFrame.from_dict({
-            full_key: [num],
-            'type': [type],
-            'value': [value],
         })
         data = pd.concat([data, entry], ignore_index=True)
 
@@ -120,7 +114,10 @@ def consume_trials(key, full_key, dt_idx, trials):
                     append_mpich(par, sbuf_size, vanilla, rtt_to_mbps(sbuf_size, par, elapsed), types_idx)
 
             else:
-                assert next(reader) == ['gflops_theo', 'gflops_ref', 'dim', 'streambuf_size', 'par', 'types_idx']
+                try:
+                    assert next(reader) == ['gflops_theo', 'gflops_ref', 'dim', 'streambuf_size', 'par', 'types_idx']
+                except StopIteration:
+                    continue
                 *params, types_idx = next(reader)
                 tg, rg, dim, sbuf_size, par = map(float, params)
                 num_packets = ceil(sbuf_size / slmp_payload_size)
@@ -149,6 +146,7 @@ if args.data_root:
     datatypes_indices = [d for d in listdir(args.data_root) if isdir(join(args.data_root, d))]
 
     data = pd.DataFrame(columns=[
+        'key',
         'parallelism',
         'msg_size',
         'is_vanilla',
@@ -161,17 +159,22 @@ if args.data_root:
         'mbps_ref',
         'mbps_overlap',
         'overlap_ratio'])
-    consume_trials('i', 'parallelism', None, None)
+    consume_trials('i', None, None)
 
     for d in datatypes_indices:
         trials = [f for f in listdir(join(args.data_root, d)) if isfile(join(args.data_root, d, f))]
-        consume_trials('p', 'parallelism', d, trials) # num_parallel is the key value
+        consume_trials('p', d, trials)
+        consume_trials('m', d, trials)
 
     data.to_pickle(data_pkl)
 
 set_style()
 
 dp: pd.DataFrame = pd.read_pickle(data_pkl)
+if args.query:
+    import code
+    code.InteractiveConsole(locals=globals()).interact()
+    sys.exit(0)
 
 lb = TitledLegendBuilder()
 
@@ -194,10 +197,13 @@ tasks_dt_tput = {
     ],
 }
 
-# diagram 1: 1 row, 2 cols
+# diagram 1: 2 row, 2 cols
 #   plot 1: dt tput - degree of parallelism
 #   plot 2: dt tput - length of message
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize(5/3), sharey=True)
+# TODO
+#   plot 3: gemm tput - degree of parallelism
+#   plot 4: gemm tput - length of message
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize(5/2), sharey=True)
 
 ax1.grid(which='both')
 ax2.grid(which='both')
@@ -210,13 +216,16 @@ ax2.set_xlabel('Message Length (B)')
 ax1.label_outer()
 ax2.label_outer()
 
-def line_x(x_col, ax, lb, y_col):
+def line_x(x_col, ax, y_col, trial, lbl, lb=None):
+    # only use data from the right set
+    if lbl != 'IPerf3':
+        trial = trial[trial['key'] == x_col[0]]
+
     x = []
     y_median = []
     y_left = []
     y_right = []
     for xx, rows in trial.groupby(x_col):
-        # print(f'plotting {xx} {rows}')
         x.append(xx)
         vals = rows[y_col].dropna()
         # print(y_col, rows[y_col])
@@ -236,7 +245,9 @@ def line_x(x_col, ax, lb, y_col):
         ax.plot(x, y_median, linestyle='--', color='purple')
     else:
         ax.errorbar(x, y_median, yerr=(y_left, y_right), ecolor='black')
-    lb.push(cat, lbl, ax.lines[-1])
+    
+    if lb:
+        lb.push(cat, lbl, ax.lines[-1])
 
 for cat, lines in tasks_dt_tput.items():
     # print(cat, lines)
@@ -246,14 +257,35 @@ for cat, lines in tasks_dt_tput.items():
         for k, v in filter_kv.items():
             trial = trial[trial[k] == v]
 
-        line_x('parallelism', ax1, lb, col)
-        line_x('msg_size', ax2, lb, col)
+        # print(cat, lbl, trial)
+
+        line_x('parallelism', ax1, col, trial, lbl, lb=lb)
+        line_x('msg_size', ax2, col, trial, lbl, lb=lb)
     
 lb.draw(fig)
+fig.tight_layout(rect=[0, 0, .75, 1])
 fig.savefig('datatypes-tput.pdf')
 
 # diagram 2: 1 row, 2 cols
-#   plot 1: gemm tput - length of message
+#   plot 1: overlap ratio - length of message
 #   plot 2: overlap ratio - length of message
 
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize(5/3), sharey=True)
+
+lb = RegularLegendBuilder()
+
+ax1.set_ylabel('Overlap Ratio')
+ax1.set_xlabel('Degree of Parallelism')
+ax2.set_xlabel('Message Length (B)')
+
+ax1.label_outer()
+ax2.label_outer()
+
+for idx, dt in enumerate(['Complex', 'Simple']):
+    trial = dp[dp['datatype'] == str(idx)]
+    print(trial)
+    line_x('parallelism', ax1, 'overlap_ratio', trial, dt, lb=lb)
+    line_x('msg_size', ax2, 'overlap_ratio', trial, dt, lb=lb)
+
+lb.draw(fig)
 fig.savefig('datatypes-overlap.pdf')
