@@ -318,9 +318,6 @@ static bool query_once(fpspin_ctx_t *ctx, msg_handler_t func) {
     if (func) {
       func(ctx, msg_buf);
     }
-
-    // clear buffer
-    memset(msg_buf, 0, app_data->userbuf_size);
     fpspin_push_resp(ctx, i, flag_from_host);
   }
 
@@ -548,6 +545,9 @@ static void dump_userbuf(fpspin_ctx_t *ctx, uint8_t *msg_buf) {
   fclose(fp);
 
   printf("Written userbuf dump to %s\n", app_data->args.out_file);
+
+  // clear buffer
+  memset(msg_buf, 0, app_data->userbuf_size);
 }
 
 int main(int argc, char *argv[]) {
