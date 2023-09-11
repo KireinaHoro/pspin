@@ -189,7 +189,7 @@ if args.query:
 set_style()
 
 # Throughput
-fig, axes = plt.subplots(2, 2, figsize=figsize(1.08))
+fig, axes = plt.subplots(2, 2, figsize=figsize(1.05))
 
 # lb = TitledLegendBuilder()
 for i in range(2):
@@ -265,7 +265,10 @@ for i in range(2):
         iperf_dat = [9.22, 10.4, 8.36, 8.49, 7.75, 8.66, 7.63, 8.60, 8.70, 7.89, 7.92, 8.16, 7.87, 8.07, 7.31, 7.78]
         iperf_dat = [x * 1000 for x in iperf_dat] # convert to Mbps
 
+        dt_max = 623
+
         iperf_line = ax.axhline(y=np.mean(iperf_dat), linestyle='--', color='purple')
+        dt_line = ax.axhline(dt_max, linestyle='-.', color='orchid')
 
         ax.grid(which='minor', alpha=0.2)
         ax.grid(which='major', alpha=0.5)
@@ -273,9 +276,9 @@ for i in range(2):
 '''
 lb.push('', 'IPerf3', iperf_line)
 lb.draw(fig)
-fig.tight_layout(rect=[0, 0, .85, 1])
 '''
-fig.legend([iperf_line], ['IPerf3'], bbox_to_anchor=[0, 1], loc='upper left')
+fig.legend([iperf_line, dt_line], ['IPerf3', 'Datatypes'], bbox_to_anchor=[.5, 1], loc='upper center', ncol=2)
+fig.tight_layout(rect=[0, 0, 1, .95])
 fig.savefig('slmp-tput.pdf')
 
 fig, axes = plt.subplots(1, 2, sharey=True, figsize=figsize(2.1))

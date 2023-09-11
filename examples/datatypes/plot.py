@@ -12,6 +12,8 @@ from math import ceil
 from os import listdir
 from os.path import isfile, join, isdir
 
+from si_prefix import si_format
+
 from plot_lib import *
 
 parser = argparse.ArgumentParser(
@@ -56,7 +58,7 @@ def consume_trials(key, dt_idx, trials):
         })
         data = pd.concat([data, entry], ignore_index=True)
 
-    def append_overlap(par, sbuf_size, dtype_idx, mbps_ref, mbps_overlap, gflops_theo, gflops_ref, gflops_overlap, overlap_ratio):
+    def append_overlap(par, sbuf_size, dtype_idx, mbps_ref, mbps_overlap, gflops_theo, gflops_ref, gflops_overlap, overlap_ratio, poll_time):
         global data
         entry = pd.DataFrame.from_dict({
             'key': [key],
@@ -69,6 +71,7 @@ def consume_trials(key, dt_idx, trials):
             'gflops_ref': [gflops_ref],
             'gflops_overlap': [gflops_overlap],
             'overlap_ratio': [overlap_ratio],
+            'poll_time': [poll_time],
         })
         data = pd.concat([data, entry], ignore_index=True)
 
@@ -140,7 +143,8 @@ def consume_trials(key, dt_idx, trials):
                         rtt_to_mbps(sbuf_size, par, dt_rtt),
                         tg, rg,
                         dim_to_gflops(dim, dgemm_iter, dgemm_overlap),
-                        dgemm_overlap / dt_rtt)
+                        dgemm_overlap / dt_rtt,
+                        dt_rtt - dgemm_overlap)
 
 if args.data_root:
     datatypes_indices = [d for d in listdir(args.data_root) if isdir(join(args.data_root, d))]
@@ -158,7 +162,8 @@ if args.data_root:
         'mbps_mpich',
         'mbps_ref',
         'mbps_overlap',
-        'overlap_ratio'])
+        'overlap_ratio',
+        'poll_time'])
     consume_trials('i', None, None)
 
     for d in datatypes_indices:
@@ -176,50 +181,22 @@ if args.query:
     code.InteractiveConsole(locals=globals()).interact()
     sys.exit(0)
 
-lb = TitledLegendBuilder()
-
-# title: [(name, column, {filter_key: filter_val})]
-tasks_dt_tput = {
-    '': [
-        ('IPerf3', 'mbps_iperf', {}),
-    ],
-    'Baseline MPICH': [
-        ('C. Simple', 'mbps_mpich', {'is_vanilla': True, 'datatype': '1'}),
-        ('C. Complex', 'mbps_mpich', {'is_vanilla': True, 'datatype': '0'}),
-        ('F. Simple', 'mbps_mpich', {'is_vanilla': False, 'datatype': '1'}),
-        ('F. Complex', 'mbps_mpich', {'is_vanilla': False, 'datatype': '0'}),
-    ],
-    'Datatypes': [
-        ('Ref. Simple', 'mbps_ref', {'datatype': '1'}),
-        ('Ref. Complex', 'mbps_ref', {'datatype': '0'}),
-        ('Ovlp. Simple', 'mbps_overlap', {'datatype': '1'}),
-        ('Ovlp. Complex', 'mbps_overlap', {'datatype': '0'}),
-    ],
-}
-
-# diagram 1: 2 row, 2 cols
-#   plot 1: dt tput - degree of parallelism
-#   plot 2: dt tput - length of message
-# TODO
-#   plot 3: gemm tput - degree of parallelism
-#   plot 4: gemm tput - length of message
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize(5/2), sharey=True)
-
-ax1.grid(which='both')
-ax2.grid(which='both')
-ax1.set_ylabel('Throughput (Mbps)')
-ax1.set_yscale('log')
-ax2.set_yscale('log')
-ax1.set_xlabel('Degree of Parallelism')
-ax2.set_xlabel('Message Length (B)')
-
-ax1.label_outer()
-ax2.label_outer()
+color_dict = {}
+next_color = 0
+def get_color(name):
+    global color_dict, next_color
+    if name not in color_dict:
+        color_dict[name] = f'C{next_color}'
+        next_color += 1
+    return color_dict[name]
 
 def line_x(x_col, ax, y_col, trial, lbl, lb=None):
     # only use data from the right set
-    if lbl != 'IPerf3':
+    is_baseline = lbl == 'IPerf3' or lbl == 'GEMM Theo.'
+    if not is_baseline:
         trial = trial[trial['key'] == x_col[0]]
+    else:
+        data = trial[y_col].dropna().mean()
 
     x = []
     y_median = []
@@ -240,27 +217,80 @@ def line_x(x_col, ax, y_col, trial, lbl, lb=None):
             y_left.append(0)
             y_right.append(0)
 
-    if lbl == 'IPerf3':
+    if is_baseline:
         # print(x, y_median)
-        ax.plot(x, y_median, linestyle='--', color='purple')
+        linestyle = '--' if lbl == 'IPerf3' else '-.'
+        ax.axhline(data, linestyle=linestyle, color='purple')
     else:
-        ax.errorbar(x, y_median, yerr=(y_left, y_right), ecolor='black')
+        ax.errorbar(x, y_median, yerr=(y_left, y_right), ecolor='black', color=get_color(cat + lbl))
     
     if lb:
         lb.push(cat, lbl, ax.lines[-1])
 
-for cat, lines in tasks_dt_tput.items():
+# diagram 1: 2 row, 2 cols
+#   plot 1: dt tput - degree of parallelism
+#   plot 2: dt tput - length of message
+# TODO
+#   plot 3: gemm tput - degree of parallelism
+#   plot 4: gemm tput - length of message, sharey=True)
+
+# title: [(name, [column], {filter_key: filter_val})]
+tasks_tput = {
+    '': [
+        ('IPerf3', ['mbps_iperf'], {}),
+        ('GEMM Theo.', ['gflops_theo'], {}),
+    ],
+    'Baseline MPICH': [
+        # ('C. Simple', ['mbps_mpich'], {'is_vanilla': True, 'datatype': '1'}),
+        # ('C. Complex', ['mbps_mpich'], {'is_vanilla': True, 'datatype': '0'}),
+        ('F. Simple', ['mbps_mpich'], {'is_vanilla': False, 'datatype': '1'}),
+        ('F. Complex', ['mbps_mpich'], {'is_vanilla': False, 'datatype': '0'}),
+    ],
+    'Datatypes/GEMM': [
+        ('Ref. Simple', ['mbps_ref', 'gflops_ref'], {'datatype': '1'}),
+        ('Ref. Complex', ['mbps_ref', 'gflops_ref'], {'datatype': '0'}),
+        ('Ovlp. Simple', ['mbps_overlap', 'gflops_overlap'], {'datatype': '1'}),
+        ('Ovlp. Complex', ['mbps_overlap', 'gflops_overlap'], {'datatype': '0'}),
+    ],
+}
+
+fig, axes = plt.subplots(2, 2, figsize=figsize(1.5))
+lb = TitledLegendBuilder()
+
+for i in range(2):
+    for j in range(2):
+        ax = axes[j][i]
+        ax.sharex(axes[0][i])
+        ax.sharey(axes[j][0])
+
+        ylabel = 'Throughput (Mbps)' if j == 0 else 'GFLOPS'
+        xlabel = 'Degree of Parallelism' if i == 0 else 'Message Length (B)'
+
+        ax.grid(which='both')
+        ax.set_ylabel(ylabel)
+        if j == 0:
+            ax.set_yscale('log')
+        if i == 1:
+            x_formatter = FuncFormatter(lambda x, pos: si_format(x, precision=0))
+            ax.xaxis.set_major_formatter(x_formatter)
+        ax.set_xlabel(xlabel)
+        ax.label_outer()
+
+for cat, lines in tasks_tput.items():
     # print(cat, lines)
-    for lbl, col, filter_kv in lines:
+    for lbl, cols, filter_kv in lines:
         trial = dp
 
         for k, v in filter_kv.items():
             trial = trial[trial[k] == v]
+                
+        for col in cols:
+            row_id = 0 if 'mbps' in col else 1
 
-        # print(cat, lbl, trial)
-
-        line_x('parallelism', ax1, col, trial, lbl, lb=lb)
-        line_x('msg_size', ax2, col, trial, lbl, lb=lb)
+            for i in range(2):
+                ax = axes[row_id][i]
+                x_col = 'parallelism' if i == 0 else 'msg_size'
+                line_x(x_col, ax, col, trial, lbl, lb=lb)
     
 lb.draw(fig)
 fig.tight_layout(rect=[0, 0, .75, 1])
@@ -270,22 +300,46 @@ fig.savefig('datatypes-tput.pdf')
 #   plot 1: overlap ratio - length of message
 #   plot 2: overlap ratio - length of message
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize(5/3), sharey=True)
+fig, axes = plt.subplots(2, 2, figsize=figsize(1.3))
+
+color_dict = {}
+next_color = 0
 
 lb = RegularLegendBuilder()
 
-ax1.set_ylabel('Overlap Ratio')
-ax1.set_xlabel('Degree of Parallelism')
-ax2.set_xlabel('Message Length (B)')
+for i in range(2):
+    for j in range(2):
+        ax = axes[j][i]
+        ax.sharex(axes[0][i])
+        ax.sharey(axes[j][0])
 
-ax1.label_outer()
-ax2.label_outer()
+        if i == 1:
+            x_formatter = FuncFormatter(lambda x, pos: si_format(x, precision=0))
+            ax.xaxis.set_major_formatter(x_formatter)
+        if j == 0:
+            y_formatter = FuncFormatter(lambda y, pos: f'{int(y * 100)}%')
+            ax.yaxis.set_major_formatter(y_formatter)
+
+        xlabel = 'Degree of Parallelism' if i == 0 else 'Message Length (B)'
+        ylabel = 'Overlap Ratio' if j == 0 else 'Poll Time (s)'
+
+        ax.grid(which='both')
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.label_outer()
 
 for idx, dt in enumerate(['Complex', 'Simple']):
     trial = dp[dp['datatype'] == str(idx)]
-    print(trial)
-    line_x('parallelism', ax1, 'overlap_ratio', trial, dt, lb=lb)
-    line_x('msg_size', ax2, 'overlap_ratio', trial, dt, lb=lb)
+
+    for i in range(2):
+        for j in range(2):
+            ax = axes[j][i]
+
+            y_col = 'overlap_ratio' if j == 0 else 'poll_time'
+            x_col = 'parallelism' if i == 0 else 'msg_size'
+
+            line_x(x_col, ax, y_col, trial, dt, lb=lb)
 
 lb.draw(fig)
+fig.tight_layout(rect=[0, 0, .82, 1])
 fig.savefig('datatypes-overlap.pdf')
