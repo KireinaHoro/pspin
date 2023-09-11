@@ -14,7 +14,8 @@ from os.path import isfile, join
 
 import matplotlib.pyplot as plt
 import matplotlib.text as mtext
-import matplotlib.colors as colors
+import matplotlib.transforms as transforms
+from matplotlib.colors import LogNorm, BoundaryNorm
 from matplotlib.ticker import FuncFormatter, ScalarFormatter
 from matplotlib.cm import ScalarMappable
 from matplotlib import container, colormaps
@@ -223,18 +224,22 @@ for i in range(2):
             legends = num_threads_sel
             legend_cid = 'tc'
             legend_name = '#Threads'
-            cm_name = 'winter_r'
+            # cm_name = 'winter_r'
+            cm_name = 'brg'
         else:
             legends = window_sizes_sel
             legend_cid = 'wnd_sz'
             legend_name = 'Window'
-            cm_name = 'autumn_r'
+            # cm_name = 'autumn_r'
+            cm_name = 'jet'
 
-        norm = colors.LogNorm(min(legends), max(legends))
-        colormap = colormaps.get_cmap(cm_name)
-        
+        norm = LogNorm(min(legends), max(legends))
+        cmap = colormaps.get_cmap(cm_name)
+        boundaries = [0]
+
         for lbl in legends:
-            color = colormap(norm(lbl))
+            color = cmap(norm(lbl))
+            boundaries.append(lbl)
 
             trial = dp[(dp[legend_cid] == lbl)]
             idx = trial.groupby(x)['tput'].transform(max) == trial['tput']
@@ -248,11 +253,24 @@ for i in range(2):
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
 
-        cbar = fig.colorbar(ScalarMappable(norm=norm, cmap=colormap), ax=ax)
+        # create discrete colorbar
+        boundaries.sort()
+        norm = BoundaryNorm(boundaries, cmap.N)
+        cbar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax)
         cbar.ax.set_title(legend_name)
-        cbar.ax.set_yscale('log', base=2)
+        # cbar.ax.set_yscale('log', base=2) # ONLY needed for LogNorm
         y_formatter = FuncFormatter(lambda y, pos: str(int(y)))
         cbar.ax.yaxis.set_major_formatter(y_formatter)
+
+        # move the label to center
+        # https://stackoverflow.com/a/49449590/5520728
+        dx = 0/72.; dy = -8/72. 
+        offset = transforms.ScaledTranslation(dx, dy, fig.dpi_scale_trans)
+        for idx, label in enumerate(cbar.ax.yaxis.get_ticklabels()):
+            label.set_transform(label.get_transform() + offset)
+            if not idx:
+                # hide 0
+                label.set_visible(False)
     
         # adapted from ax.label_outer()
         if i == 1:
@@ -307,27 +325,26 @@ for i in range(2):
         legends = num_threads_sel
         legend_cid = 'tc'
         legend_name = '#Threads'
-        cm_name = 'winter_r'
+        # cm_name = 'winter_r'
+        cm_name = 'brg'
     else:
         legends = window_sizes_sel
         legend_cid = 'wnd_sz'
         legend_name = 'Window'
-        cm_name = 'autumn_r'
+        # cm_name = 'autumn_r'
+        cm_name = 'jet'
 
     ax.set_xlabel(xlabel)
     ax.label_outer()
 
-    norm = colors.LogNorm(min(legends), max(legends))
-    colormap = colormaps.get_cmap(cm_name)
+    norm = LogNorm(min(legends), max(legends))
+    cmap = colormaps.get_cmap(cm_name)
 
-    cbar = fig.colorbar(ScalarMappable(norm=norm, cmap=colormap), ax=ax)
-    cbar.ax.set_title(legend_name)
-    cbar.ax.set_yscale('log', base=2)
-    y_formatter = FuncFormatter(lambda y, pos: str(int(y)))
-    cbar.ax.yaxis.set_major_formatter(y_formatter)
-    
+    boundaries = [0]
+
     for lbl in legends:
-        color = colormap(norm(lbl))
+        color = cmap(norm(lbl))
+        boundaries.append(lbl)
 
         trial = dp[(dp[legend_cid] == lbl)]
         idx = trial.groupby(x)['loss_ratio'].transform(max) == trial['loss_ratio']
@@ -335,6 +352,25 @@ for i in range(2):
 
         ax.plot(x, 'loss_ratio', data=trial, color=color)
 
+    # create discrete colorbar
+    boundaries.sort()
+    norm = BoundaryNorm(boundaries, cmap.N)
+    cbar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax)
+    cbar.ax.set_title(legend_name)
+    # cbar.ax.set_yscale('log', base=2) # ONLY needed for LogNorm
+    y_formatter = FuncFormatter(lambda y, pos: str(int(y)))
+    cbar.ax.yaxis.set_major_formatter(y_formatter)
+
+    # move the label to center
+    # https://stackoverflow.com/a/49449590/5520728
+    dx = 0/72.; dy = -8/72. 
+    offset = transforms.ScaledTranslation(dx, dy, fig.dpi_scale_trans)
+    for idx, label in enumerate(cbar.ax.yaxis.get_ticklabels()):
+        label.set_transform(label.get_transform() + offset)
+        if not idx:
+            # hide 0
+            label.set_visible(False)
+    
     ax.grid(which='minor', alpha=0.2)
     ax.grid(which='major', alpha=0.5)
 
