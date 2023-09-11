@@ -300,7 +300,7 @@ fig.savefig('datatypes-tput.pdf')
 #   plot 1: overlap ratio - length of message
 #   plot 2: overlap ratio - length of message
 
-fig, axes = plt.subplots(2, 2, figsize=figsize(1.3))
+fig, axes = plt.subplots(1, 2, figsize=figsize(2.3))
 
 color_dict = {}
 next_color = 0
@@ -308,37 +308,34 @@ next_color = 0
 lb = RegularLegendBuilder()
 
 for i in range(2):
-    for j in range(2):
-        ax = axes[j][i]
-        ax.sharex(axes[0][i])
-        ax.sharey(axes[j][0])
+    ax = axes[i]
+    ax.sharey(axes[0])
 
-        if i == 1:
-            x_formatter = FuncFormatter(lambda x, pos: si_format(x, precision=0))
-            ax.xaxis.set_major_formatter(x_formatter)
-        if j == 0:
-            y_formatter = FuncFormatter(lambda y, pos: f'{int(y * 100)}%')
-            ax.yaxis.set_major_formatter(y_formatter)
+    if i == 1:
+        x_formatter = FuncFormatter(lambda x, pos: si_format(x, precision=0))
+        ax.xaxis.set_major_formatter(x_formatter)
 
-        xlabel = 'Degree of Parallelism' if i == 0 else 'Message Length (B)'
-        ylabel = 'Overlap Ratio' if j == 0 else 'Poll Time (s)'
+    y_formatter = FuncFormatter(lambda y, pos: f'{int(y * 100)}%')
+    ax.yaxis.set_major_formatter(y_formatter)
 
-        ax.grid(which='both')
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-        ax.label_outer()
+    xlabel = 'Degree of Parallelism' if i == 0 else 'Message Length (B)'
+    ylabel = 'Overlap Ratio'
+
+    ax.grid(which='both')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.label_outer()
 
 for idx, dt in enumerate(['Complex', 'Simple']):
     trial = dp[dp['datatype'] == str(idx)]
 
     for i in range(2):
-        for j in range(2):
-            ax = axes[j][i]
+        ax = axes[i]
 
-            y_col = 'overlap_ratio' if j == 0 else 'poll_time'
-            x_col = 'parallelism' if i == 0 else 'msg_size'
+        y_col = 'overlap_ratio'
+        x_col = 'parallelism' if i == 0 else 'msg_size'
 
-            line_x(x_col, ax, y_col, trial, dt, lb=lb)
+        line_x(x_col, ax, y_col, trial, dt, lb=lb)
 
 lb.draw(fig)
 fig.tight_layout(rect=[0, 0, .82, 1])
